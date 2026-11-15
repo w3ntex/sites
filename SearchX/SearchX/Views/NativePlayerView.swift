@@ -174,10 +174,6 @@ struct ImageViewerView: View {
     let url: URL
     var onOpenPage: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
-    @State private var scale: CGFloat = 1
-    @State private var lastScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
     @State private var toast: String?
 
     var body: some View {
@@ -194,47 +190,72 @@ struct ImageViewerView: View {
                     Button(action: onOpenPage) { Image(systemName: "globe").font(.title3) }
                 }
             }
-            GeometryReader { geo in
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit()
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { scale = max(1, min(6, lastScale * $0)) }
-                                    .onEnded { _ in lastScale = scale; if scale == 1 { offset = .zero; lastOffset = .zero } }
-                                    .simultaneously(with: DragGesture()
-                                        .onChanged { v in
-                                            guard scale > 1 else { return }
-                                            offset = CGSize(width: lastOffset.width + v.translation.width,
-                                                            height: lastOffset.height + v.translation.height)
-                                        }
-                                        .onEnded { _ in lastOffset = offset })
-                            )
-                            .onTapGesture(count: 2) {
-                                withAnimation(.spring) {
-                                    if scale > 1 { scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero }
-                                    else { scale = 2.5; lastScale = 2.5 }
-                                }
-                            }
-                    case .failure:
-                        VStack(spacing: 12) {
-                            Image(systemName: "photo.badge.exclamationmark").font(.largeTitle)
-                            Text("Couldn't load image.")
-                            if let onOpenPage { Button("Open source page", action: onOpenPage) }
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                    default:
-                        ProgressView().tint(.white).frame(width: geo.size.width, height: geo.size.height)
-                    }
-                }
-            }
+            ZoomableImage(url: url, onOpenPage: onOpenPage)
         }
         .foregroundStyle(.white)
         .background(Color.black.ignoresSafeArea())
         .toast($toast)
+    }
+}
+
+/// Pinch / double-tap zoomable image. Panning is only captured while zoomed in, so a parent
+/// paging gallery still receives horizontal swipes at normal scale.
+struct ZoomableImage: View {
+    let url: URL
+    var onOpenPage: (() -> Void)? = nil
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    private func reset() {
+        scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { scale = max(1, min(6, lastScale * $0)) }
+                                .onEnded { _ in
+                                    lastScale = scale
+                                    if scale <= 1.01 { withAnimation(.spring) { reset() } }
+                                }
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { v in
+                                    offset = CGSize(width: lastOffset.width + v.translation.width,
+                                                    height: lastOffset.height + v.translation.height)
+                                }
+                                .onEnded { _ in lastOffset = offset },
+                            including: scale > 1 ? .all : .subviews
+                        )
+                        .onTapGesture(count: 2) {
+                            withAnimation(.spring) {
+                                if scale > 1 { reset() } else { scale = 2.5; lastScale = 2.5 }
+                            }
+                        }
+                case .failure:
+                    VStack(spacing: 12) {
+                        Image(systemName: "photo.badge.exclamationmark").font(.largeTitle)
+                        Text("Couldn't load image.")
+                        if let onOpenPage { Button("Open source page", action: onOpenPage) }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                default:
+                    ProgressView().tint(.white).frame(width: geo.size.width, height: geo.size.height)
+                }
+            }
+        }
+        .foregroundStyle(.white)
     }
 }

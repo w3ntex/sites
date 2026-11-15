@@ -4,7 +4,7 @@ struct SearchView: View {
     @EnvironmentObject private var aggregator: SearchAggregator
     @EnvironmentObject private var filterStore: FilterStore
     @State private var text = ""
-    @State private var selected: VideoResult?
+    @State private var viewer: ViewerRequest?
     @State private var toast: String?
 
     var body: some View {
@@ -29,7 +29,7 @@ struct SearchView: View {
             .onSubmit(of: .search, submit)
             .onChange(of: filterStore.current) { _, new in aggregator.filtersChanged(new) }
             .onAppear { aggregator.filtersChanged(filterStore.current) }
-            .fullScreenCover(item: $selected) { MediaViewer(result: $0) }
+            .fullScreenCover(item: $viewer) { ViewerHost(request: $0) }
             .alert("Search", isPresented: Binding(get: { aggregator.errorMessage != nil },
                                                   set: { if !$0 { aggregator.errorMessage = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -80,7 +80,7 @@ struct SearchView: View {
                 results: aggregator.results,
                 header: AnyView(SourceStatusBar()),
                 footer: AnyView(loadMoreFooter),
-                onSelect: { selected = $0 },
+                onSelect: { viewer = .make($0, in: aggregator.results) },
                 onAppearItem: { aggregator.loadMoreIfNeeded(current: $0) },
                 onToast: { toast = $0 })
             .refreshable { await aggregator.refresh() }

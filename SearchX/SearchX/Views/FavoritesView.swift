@@ -29,7 +29,7 @@ struct FavoritesView: View {
 
 struct FavoritesGrid: View {
     @Query(sort: \FavoriteItem.createdAt, order: .reverse) private var favorites: [FavoriteItem]
-    @State private var selected: VideoResult?
+    @State private var viewer: ViewerRequest?
     @State private var toast: String?
 
     var body: some View {
@@ -38,13 +38,14 @@ struct FavoritesGrid: View {
                 ContentUnavailableView("No favorites yet", systemImage: "heart",
                                        description: Text("Long-press any result and choose “Save to favorites”."))
             } else {
-                ResultsGridView(results: favorites.compactMap { $0.asResult },
-                                onSelect: { selected = $0 },
+                let results = favorites.compactMap { $0.asResult }
+                ResultsGridView(results: results,
+                                onSelect: { viewer = .make($0, in: results) },
                                 onToast: { toast = $0 })
                     .padding(.top, 4)
             }
         }
-        .fullScreenCover(item: $selected) { MediaViewer(result: $0) }
+        .fullScreenCover(item: $viewer) { ViewerHost(request: $0) }
         .toast($toast)
     }
 }
@@ -165,7 +166,7 @@ struct PlaylistRow: View {
 struct PlaylistDetailView: View {
     let playlist: Playlist
     @Environment(\.modelContext) private var context
-    @State private var selected: VideoResult?
+    @State private var viewer: ViewerRequest?
     @State private var renaming = false
     @State private var renameText = ""
 
@@ -174,7 +175,7 @@ struct PlaylistDetailView: View {
         List {
             ForEach(items) { item in
                 Button {
-                    if let r = item.asResult { Haptics.light(); selected = r }
+                    if let r = item.asResult { Haptics.light(); viewer = .make(r, in: items.compactMap { $0.asResult }) }
                 } label: {
                     MediaRow(snapshot: item, subtitle: item.sourceID?.displayName ?? item.source)
                 }
@@ -215,7 +216,7 @@ struct PlaylistDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .fullScreenCover(item: $selected) { MediaViewer(result: $0) }
+        .fullScreenCover(item: $viewer) { ViewerHost(request: $0) }
     }
 }
 
