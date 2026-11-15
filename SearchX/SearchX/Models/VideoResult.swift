@@ -39,6 +39,8 @@ struct VideoResult: Identifiable, Hashable, Sendable {
     var likes: Int? = nil
     /// Source tags, used by the content safety filter.
     var tags: [String] = []
+    /// Uploader / channel / performers / account, depending on the source.
+    var creators: [String] = []
 
     init(source: SourceID,
          rawID: String,
@@ -53,7 +55,8 @@ struct VideoResult: Identifiable, Hashable, Sendable {
          publishedAt: Date? = nil,
          resolutionHeight: Int? = nil,
          likes: Int? = nil,
-         tags: [String] = []) {
+         tags: [String] = [],
+         creators: [String] = []) {
         self.id = "\(source.rawValue):\(rawID)"
         self.title = title
         self.duration = duration
@@ -68,6 +71,9 @@ struct VideoResult: Identifiable, Hashable, Sendable {
         self.resolutionHeight = resolutionHeight
         self.likes = likes
         self.tags = tags
+        self.creators = creators
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "[deleted]" }
     }
 
     var sourceID: SourceID? { SourceID(rawValue: source) }

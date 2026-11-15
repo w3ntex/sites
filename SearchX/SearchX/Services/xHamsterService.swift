@@ -75,13 +75,19 @@ struct XHamsterService: SearchService {
                     let created = (dict["created"] as? Double).map { Date(timeIntervalSince1970: $0) }
                     var rating: Double?
                     if let r = dict["rating"] as? [String: Any], let v = r["value"] as? Double { rating = v <= 1 ? v * 100 : v }
+                    var creator: String?
+                    for key in ["landing", "uploader", "author", "user", "channel"] {
+                        if let d = dict[key] as? [String: Any], let n = d["name"] as? String, !n.isEmpty { creator = n; break }
+                    }
+                    creator = creator ?? (dict["uploaderName"] as? String) ?? (dict["channelName"] as? String)
                     out.append(VideoResult(
                         source: .xhamster, rawID: id,
                         title: HTML.decodeEntities((dict["title"] as? String) ?? "Untitled"),
                         duration: (dict["duration"] as? Int) ?? Parse.clockDuration(dict["duration"] as? String),
                         thumbnail: thumbURL, viewCount: views, rating: rating,
                         pageURL: pageURL, mediaType: .video, publishedAt: created,
-                        resolutionHeight: isUHD ? 2160 : (isHD ? 720 : nil)))
+                        resolutionHeight: isUHD ? 2160 : (isHD ? 720 : nil),
+                        creators: creator.map { [HTML.decodeEntities($0)] } ?? []))
                     return
                 }
                 for v in dict.values { visit(v, depth: depth + 1) }

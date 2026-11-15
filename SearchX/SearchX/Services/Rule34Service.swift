@@ -15,6 +15,7 @@ struct Rule34Service: SearchService {
         let width: FlexNumber?
         let height: FlexNumber?
         let change: FlexNumber?
+        let owner: String?
     }
 
     /// "big tits, blonde" → ["big_tits", "blonde"]; "blonde" → ["blonde"]
@@ -77,7 +78,8 @@ struct Rule34Service: SearchService {
                 pageURL: page, mediaType: type,
                 directMediaURL: type == .image ? (Parse.url(p.sample_url) ?? file) : file,
                 publishedAt: p.change?.value.map { Date(timeIntervalSince1970: $0) },
-                resolutionHeight: p.height?.int, likes: p.score?.int, tags: tagList)
+                resolutionHeight: p.height?.int, likes: p.score?.int, tags: tagList,
+                creators: p.owner.map { [$0] } ?? [])
         }
     }
 }

@@ -65,7 +65,8 @@ struct XVideosService: SearchService {
                 thumbnail: thumb,
                 viewCount: Parse.compactNumber(viewsText?.replacingOccurrences(of: " ", with: "")),
                 rating: nil, pageURL: page, mediaType: .video,
-                resolutionHeight: Parse.resolution(hdMark)))
+                resolutionHeight: Parse.resolution(hdMark),
+                creators: Rx.first(#"<span class="name">([^<]+)</span>"#, in: chunk).map { [HTML.decodeEntities($0)] } ?? []))
         }
         return out
     }

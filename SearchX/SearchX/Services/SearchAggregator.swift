@@ -17,6 +17,23 @@ final class SearchAggregator: ObservableObject {
     @Published private(set) var isLoadingMore = false
     @Published private(set) var query = ""
     @Published var errorMessage: String?
+    /// Creators found in the current results (after filters, before the creator filter).
+    @Published private(set) var creators: [CreatorInfo] = []
+    /// Lowercased creator keys the user picked; empty = show everyone.
+    @Published private(set) var selectedCreators: Set<String> = []
+
+    struct CreatorInfo: Identifiable, Hashable {
+        let key: String
+        let name: String
+        let count: Int
+        let sources: [SourceID]
+        let thumbnail: URL?
+        var id: String { key }
+    }
+
+    static func creatorKey(_ name: String) -> String {
+        name.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "@ ").union(.whitespaces))
+    }
 
     private let services: [SourceID: any SearchService]
     private var rawBySource: [SourceID: [VideoResult]] = [:]
@@ -94,8 +111,31 @@ final class SearchAggregator: ObservableObject {
         }
     }
 
+    // MARK: Creators
+
+    func toggleCreator(_ key: String) {
+        if selectedCreators.contains(key) { selectedCreators.remove(key) } else { selectedCreators.insert(key) }
+        Haptics.selection()
+        withAnimation(.easeOut(duration: 0.2)) { rebuild() }
+    }
+
+    /// Shows only this creator (used from a result's long-press menu).
+    func showOnly(creator name: String) {
+        selectedCreators = [Self.creatorKey(name)]
+        Haptics.selection()
+        withAnimation(.easeOut(duration: 0.2)) { rebuild() }
+    }
+
+    func clearCreators() {
+        guard !selectedCreators.isEmpty else { return }
+        selectedCreators = []
+        withAnimation(.easeOut(duration: 0.2)) { rebuild() }
+    }
+
     func clear() {
         task?.cancel()
+        selectedCreators = []
+        creators = []
         query = ""
         results = []
         rawBySource = [:]
@@ -115,6 +155,8 @@ final class SearchAggregator: ObservableObject {
         exhausted = []
         results = []
         errorMessage = nil
+        selectedCreators = []
+        creators = []
         isLoading = true
         isLoadingMore = false
         sourceStates = Dictionary(uniqueKeysWithValues: filters.activeSources.map { ($0, SourceState.loading) })
@@ -176,8 +218,13 @@ final class SearchAggregator: ObservableObject {
     private func rebuild() {
         let order = SourceID.allCases
         var seenPages = Set<String>()
-        let perSource: [[VideoResult]] = order.map { src in
+        let filtered: [[VideoResult]] = order.map { src in
             (rawBySource[src] ?? []).filter { filters.matches($0) && seenPages.insert($0.pageURL.absoluteString).inserted }
+        }
+        updateCreators(from: filtered.flatMap { $0 })
+        let selected = selectedCreators
+        let perSource: [[VideoResult]] = selected.isEmpty ? filtered : filtered.map { list in
+            list.filter { r in r.creators.contains { selected.contains(Self.creatorKey($0)) } }
         }
 
         switch filters.sort {
@@ -197,6 +244,27 @@ final class SearchAggregator: ObservableObject {
         case .topRated:
             results = perSource.flatMap { $0 }.stableSorted { ($0.rating ?? -1) > ($1.rating ?? -1) }
         }
+    }
+}
+
+extension SearchAggregator {
+    fileprivate func updateCreators(from items: [VideoResult]) {
+        var counts: [String: (name: String, count: Int, sources: Set<SourceID>, thumb: URL?)] = [:]
+        for r in items {
+            for name in Set(r.creators) {
+                let key = Self.creatorKey(name)
+                guard !key.isEmpty else { continue }
+                var entry = counts[key] ?? (name, 0, [], r.thumbnail)
+                entry.count += 1
+                if let src = r.sourceID { entry.sources.insert(src) }
+                counts[key] = entry
+            }
+        }
+        creators = counts.map { key, v in
+            CreatorInfo(key: key, name: v.name, count: v.count,
+                        sources: SourceID.allCases.filter(v.sources.contains), thumbnail: v.thumb)
+        }
+        .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }
 

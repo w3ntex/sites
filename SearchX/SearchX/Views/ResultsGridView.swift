@@ -9,6 +9,8 @@ struct ResultsGridView: View {
     var onSelect: (VideoResult) -> Void
     var onAppearItem: ((VideoResult) -> Void)? = nil
     var onToast: ((String) -> Void)? = nil
+    /// When set, the long-press menu offers "Only show <creator>".
+    var onCreator: ((String) -> Void)? = nil
 
     @State private var playlistTarget: VideoResult?
 
@@ -21,7 +23,8 @@ struct ResultsGridView: View {
                 ForEach(results) { r in
                     ResultCell(result: r,
                                onAddToPlaylist: { playlistTarget = r },
-                               onToast: onToast)
+                               onToast: onToast,
+                               onCreator: onCreator)
                         .onTapGesture {
                             Haptics.light()
                             onSelect(r)
@@ -44,6 +47,7 @@ struct ResultCell: View {
     let result: VideoResult
     var onAddToPlaylist: () -> Void
     var onToast: ((String) -> Void)?
+    var onCreator: ((String) -> Void)? = nil
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -78,6 +82,17 @@ struct ResultCell: View {
                 .lineLimit(2)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let creator = result.creators.first {
+                HStack(spacing: 3) {
+                    Image(systemName: "person.fill").font(.system(size: 8))
+                    Text(creator)
+                    if result.creators.count > 1 { Text("+\(result.creators.count - 1)") }
+                }
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(Theme.accent.opacity(0.9))
+                .lineLimit(1)
+            }
 
             HStack(spacing: 4) {
                 Text(result.sourceName)
@@ -114,6 +129,15 @@ struct ResultCell: View {
                 onAddToPlaylist()
             } label: {
                 Label("Add to playlist…", systemImage: "text.badge.plus")
+            }
+            if let onCreator, !result.creators.isEmpty {
+                ForEach(result.creators.prefix(3), id: \.self) { name in
+                    Button {
+                        onCreator(name)
+                    } label: {
+                        Label("Only show \(name)", systemImage: "person.crop.circle")
+                    }
+                }
             }
             ShareLink(item: result.pageURL) { Label("Share link", systemImage: "square.and.arrow.up") }
             Link(destination: result.pageURL) { Label("Open in Safari", systemImage: "safari") }

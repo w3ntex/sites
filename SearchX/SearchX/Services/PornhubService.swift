@@ -12,11 +12,13 @@ struct PHNetworkVideo: Decodable {
     let thumb: String?
     let publishDate: String?
     let tags: [String]
+    let pornstars: [String]
 
     private enum K: String, CodingKey {
-        case duration, views, video_id, rating, title, url, default_thumb, thumb, publish_date, tags
+        case duration, views, video_id, rating, title, url, default_thumb, thumb, publish_date, tags, pornstars
     }
     private struct Tag: Decodable { let tag_name: String? }
+    private struct Star: Decodable { let pornstar_name: String? }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: K.self)
@@ -36,6 +38,13 @@ struct PHNetworkVideo: Decodable {
         } else {
             tags = []
         }
+        if let s = try? c.decodeIfPresent(LossyArray<Star>.self, forKey: .pornstars) {
+            pornstars = s.items.compactMap(\.pornstar_name)
+        } else if let s = try? c.decodeIfPresent([String].self, forKey: .pornstars) {
+            pornstars = s
+        } else {
+            pornstars = []
+        }
     }
 
     /// `ratingScale`: multiply raw rating to reach 0–100 (Pornhub is already a %, RedTube is 0–5).
@@ -52,7 +61,8 @@ struct PHNetworkVideo: Decodable {
             rating: rating?.value.map { min(100, $0 * ratingScale) },
             pageURL: page, mediaType: .video,
             publishedAt: Parse.sqlDate(publishDate),
-            tags: tags)
+            tags: tags,
+            creators: pornstars.map(HTML.decodeEntities))
     }
 }
 

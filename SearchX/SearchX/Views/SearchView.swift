@@ -78,11 +78,12 @@ struct SearchView: View {
         } else {
             ResultsGridView(
                 results: aggregator.results,
-                header: AnyView(SourceStatusBar()),
+                header: AnyView(VStack(spacing: 0) { SourceStatusBar(); CreatorBar() }),
                 footer: AnyView(loadMoreFooter),
                 onSelect: { viewer = .make($0, in: aggregator.results) },
                 onAppearItem: { aggregator.loadMoreIfNeeded(current: $0) },
-                onToast: { toast = $0 })
+                onToast: { toast = $0 },
+                onCreator: { aggregator.showOnly(creator: $0) })
             .refreshable { await aggregator.refresh() }
         }
     }

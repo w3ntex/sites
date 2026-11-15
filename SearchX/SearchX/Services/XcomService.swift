@@ -69,7 +69,8 @@ struct XcomService: SearchService {
                 duration: nil, thumbnail: thumb, viewCount: nil, rating: nil,
                 pageURL: page, mediaType: type,
                 directMediaURL: type == .image ? thumb : nil,
-                likes: Parse.compactNumber(likes)))
+                likes: Parse.compactNumber(likes),
+                creators: ["@\(user)"]))
         }
         return out
     }

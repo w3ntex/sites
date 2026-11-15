@@ -23,6 +23,7 @@ struct RedditService: SearchService {
     private struct Child: Decodable { let data: Post }
     private struct Post: Decodable {
         let id: String
+        let author: String?
         let title: String?
         let subreddit: String?
         let permalink: String?
@@ -170,6 +171,7 @@ struct RedditService: SearchService {
             pageURL: pageURL, mediaType: type,
             directMediaURL: direct,
             publishedAt: p.created_utc?.value.map { Date(timeIntervalSince1970: $0) },
-            resolutionHeight: height, likes: p.ups?.int)
+            resolutionHeight: height, likes: p.ups?.int,
+            creators: p.author.map { ["u/\($0)"] } ?? [])
     }
 }

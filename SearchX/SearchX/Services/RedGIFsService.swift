@@ -88,7 +88,8 @@ struct RedGIFsService: SearchService {
                 pageURL: page, mediaType: isImage ? .image : .gif,
                 directMediaURL: Parse.url(g.urls.hd) ?? Parse.url(g.urls.sd),
                 publishedAt: g.createDate?.value.map { Date(timeIntervalSince1970: $0) },
-                resolutionHeight: g.height?.int, likes: g.likes?.int, tags: tags)
+                resolutionHeight: g.height?.int, likes: g.likes?.int, tags: tags,
+                creators: g.userName.map { [$0] } ?? [])
         }
     }
 }
