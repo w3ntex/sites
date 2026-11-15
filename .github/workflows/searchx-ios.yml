@@ -1,0 +1,35 @@
+name: SearchX iOS build
+
+on:
+  push:
+    paths:
+      - "SearchX/**"
+      - ".github/workflows/searchx-ios.yml"
+  pull_request:
+    paths:
+      - "SearchX/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: SearchX
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build unsigned IPA
+        run: ./scripts/build_ipa.sh
+      - name: Show compiler errors
+        if: failure()
+        run: grep -E "error:|warning: .*(will be an error)" build.log | sort -u | head -100 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SearchX-unsigned-ipa
+          path: SearchX/build/SearchX.ipa
+          if-no-files-found: error
