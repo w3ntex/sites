@@ -9,24 +9,35 @@ struct XcomService: SearchService {
         let instances = Credentials.nitterInstances
         guard !instances.isEmpty else { throw SearchError.missingCredentials("at least one Nitter instance") }
         let query = "\(r.keyword) porn"
-        var lastError: Error = SearchError.unavailable("No Nitter instance responded.")
+        var failures: [String] = []
 
         for host in instances {
             try Task.checkCancellation()
-            guard let url = URL.make("https://\(host)/search", [
-                "f": "tweets", "q": query, "f-media": "on"
-            ]) else { continue }
+            var c = URLComponents()
+            c.scheme = "https"
+            c.host = host.split(separator: ":").first.map(String.init)
+            if let port = host.split(separator: ":").dropFirst().first.flatMap({ Int($0) }) { c.port = port }
+            c.path = "/search"
+            c.queryItems = [URLQueryItem(name: "f", value: "tweets"),
+                            URLQueryItem(name: "q", value: query),
+                            URLQueryItem(name: "f-media", value: "on")]
+            if r.page > 1 { c.queryItems?.append(URLQueryItem(name: "page", value: String(r.page))) }
+            guard let url = c.url else { failures.append("\(host): invalid address"); continue }
             do {
                 let html = try await HTTPClient.shared.string(url, userAgent: HTTPClient.desktopUA)
-                guard html.contains("timeline") else { continue }   // bot wall / error page
-                return Self.parse(html, instance: host)
+                if html.contains("timeline-item") { return Self.parse(html, instance: host) }
+                if html.contains("No items found") || html.contains("timeline-none") { return [] }
+                // Anti-bot pages (Anubis / Cloudflare) or a dead instance.
+                failures.append("\(host): blocked by anti-bot check")
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                lastError = error
+                failures.append("\(host): \(SearchError.message(for: error))")
             }
         }
-        throw (lastError as? SearchError) ?? SearchError.unavailable("Nitter instances unavailable: \(SearchError.message(for: lastError))")
+        throw SearchError.unavailable(
+            "No Nitter instance answered (X itself requires login). Add a working instance in Settings → Sources → X.\n\n"
+            + failures.joined(separator: "\n"))
     }
 
     /// Maps a Nitter "/pic/..." proxy path back to the original twimg.com URL.

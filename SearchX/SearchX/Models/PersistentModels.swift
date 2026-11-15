@@ -36,7 +36,7 @@ extension MediaSnapshot {
         guard let page = URL(string: pageURL) else { return nil }
         let thumb = URL(string: thumbnailURL) ?? page
         let rawID = resultID.split(separator: ":", maxSplits: 1).last.map(String.init) ?? resultID
-        var r = VideoResult(source: sourceID ?? .pornhub, rawID: rawID, title: title, duration: duration,
+        var r = VideoResult(source: sourceID ?? .xvideos, rawID: rawID, title: title, duration: duration,
                             thumbnail: thumb, viewCount: viewCount, rating: nil, pageURL: page,
                             mediaType: mediaType, directMediaURL: directMediaURL.flatMap(URL.init(string:)))
         r.id = resultID

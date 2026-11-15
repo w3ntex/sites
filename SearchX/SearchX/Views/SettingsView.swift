@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import WebKit
+import AuthenticationServices
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
@@ -311,6 +312,8 @@ struct SourcesSettingsView: View {
                 Text("Leave empty to use a free temporary token fetched automatically.")
             }
 
+            RedditAccountSection()
+
             Section {
                 TextField("Instances", text: $settings.nitterInstances, axis: .vertical)
                     .lineLimit(1...4)
@@ -326,5 +329,67 @@ struct SourcesSettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.background)
         .navigationTitle("Sources")
+    }
+}
+
+// MARK: - Reddit account
+
+struct RedditAccountSection: View {
+    @EnvironmentObject private var settings: AppSettings
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            if let user = settings.redditUsername, RedditTokenStore.isSignedIn {
+                Label("Connected as u/\(user)", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Button("Disconnect", role: .destructive) {
+                    Task {
+                        await RedditTokenStore.shared.signOut()
+                        settings.redditUsername = nil
+                        Haptics.light()
+                    }
+                }
+            } else {
+                TextField("Client ID", text: $settings.redditClientID)
+                Button {
+                    Task { await connect() }
+                } label: {
+                    HStack {
+                        Label("Connect Reddit account", systemImage: "person.crop.circle.badge.checkmark")
+                        if busy { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(busy || settings.redditClientID.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(.yellow)
+            }
+        } header: {
+            Text("Reddit")
+        } footer: {
+            Text("""
+            1. On reddit.com (logged in), open reddit.com/prefs/apps → “create another app…”.
+            2. Name: SearchX · type: **installed app** · redirect uri: **searchx://reddit-auth** → create.
+            3. Copy the ID shown under the app name, paste it above, tap Connect.
+            Turn on “Show mature content” in your Reddit settings to get NSFW results.
+            """)
+        }
+    }
+
+    private func connect() async {
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            settings.redditUsername = try await RedditLogin.shared.signIn()
+            Haptics.success()
+        } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
+            // user closed the sheet
+        } catch {
+            self.error = SearchError.message(for: error)
+            Haptics.error()
+        }
     }
 }

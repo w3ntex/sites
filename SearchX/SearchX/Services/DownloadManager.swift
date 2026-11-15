@@ -104,7 +104,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     @MainActor
     private func snapshot(of item: DownloadItem) -> VideoResult? {
         guard let page = URL(string: item.pageURL), let thumb = URL(string: item.thumbnailURL) else { return nil }
-        return VideoResult(source: SourceID(rawValue: item.source) ?? .pornhub, rawID: item.id.uuidString,
+        return VideoResult(source: SourceID(rawValue: item.source) ?? .xvideos, rawID: item.id.uuidString,
                            title: item.title, duration: nil, thumbnail: thumb, viewCount: nil, rating: nil,
                            pageURL: page, mediaType: MediaType(rawValue: item.mediaTypeRaw) ?? .video)
     }

@@ -14,6 +14,11 @@ enum SettingsKeys {
     static let currentFilters = "currentFilters"
     static let defaultFilters = "defaultFilters"
     static let recentSearches = "recentSearches"
+    static let redditClientID = "redditClientID"
+    static let redditAccessToken = "redditAccessToken"
+    static let redditRefreshToken = "redditRefreshToken"
+    static let redditTokenExpiry = "redditTokenExpiry"
+    static let redditUsername = "redditUsername"
 }
 
 /// Credentials readable from any thread (services run off the main actor).
@@ -41,15 +46,22 @@ enum Credentials {
         let raw = (UserDefaults.standard.string(forKey: SettingsKeys.rule34UserID) ?? "").filter { !$0.isWhitespace }
         return raw.contains("=") ? "" : raw
     }
-    static let defaultNitter = "nitter.net, nitter.poast.org, nitter.privacydev.net"
+    static let defaultNitter = "xcancel.com, nitter.net, nitter.poast.org, nitter.privacydev.net"
+    /// Cleaned host names: scheme, paths and stray characters (smart punctuation, invisible
+    /// spaces from copy/paste) are removed so they always form a valid URL.
     static var nitterInstances: [String] {
         let raw = UserDefaults.standard.string(forKey: SettingsKeys.nitterInstances) ?? defaultNitter
-        return raw.split(whereSeparator: { $0 == "," || $0 == "\n" || $0 == " " })
-            .map { $0.trimmingCharacters(in: .whitespaces)
-                .replacingOccurrences(of: "https://", with: "")
-                .replacingOccurrences(of: "http://", with: "")
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
-            .filter { !$0.isEmpty }
+        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789.-:")
+        var seen = Set<String>()
+        return raw.lowercased()
+            .split(whereSeparator: { $0 == "," || $0 == ";" || $0.isWhitespace || $0.isNewline })
+            .map { token -> String in
+                var t = String(token)
+                if let r = t.range(of: "://") { t = String(t[r.upperBound...]) }
+                if let slash = t.firstIndex(of: "/") { t = String(t[..<slash]) }
+                return String(t.filter { allowed.contains($0) }).trimmingCharacters(in: CharacterSet(charactersIn: ".-:"))
+            }
+            .filter { $0.contains(".") && seen.insert($0).inserted }
     }
 }
 
@@ -68,6 +80,9 @@ final class AppSettings: ObservableObject {
     @Published var rule34APIKey: String { didSet { d.set(rule34APIKey, forKey: SettingsKeys.rule34APIKey) } }
     @Published var rule34UserID: String { didSet { d.set(rule34UserID, forKey: SettingsKeys.rule34UserID) } }
     @Published var nitterInstances: String { didSet { d.set(nitterInstances, forKey: SettingsKeys.nitterInstances) } }
+    @Published var redditClientID: String { didSet { d.set(redditClientID, forKey: SettingsKeys.redditClientID) } }
+    /// Set after a successful Reddit login (nil = not connected).
+    @Published var redditUsername: String? { didSet { d.set(redditUsername, forKey: SettingsKeys.redditUsername) } }
 
     private init() {
         ageConfirmed = d.bool(forKey: SettingsKeys.ageConfirmed)
@@ -80,6 +95,8 @@ final class AppSettings: ObservableObject {
         rule34APIKey = d.string(forKey: SettingsKeys.rule34APIKey) ?? ""
         rule34UserID = d.string(forKey: SettingsKeys.rule34UserID) ?? ""
         nitterInstances = d.string(forKey: SettingsKeys.nitterInstances) ?? Credentials.defaultNitter
+        redditClientID = d.string(forKey: SettingsKeys.redditClientID) ?? ""
+        redditUsername = d.string(forKey: SettingsKeys.redditUsername)
     }
 }
 

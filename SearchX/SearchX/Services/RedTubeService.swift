@@ -66,36 +66,6 @@ struct PHNetworkVideo: Decodable {
     }
 }
 
-struct PornhubService: SearchService {
-    let source = SourceID.pornhub
-
-    private struct Response: Decodable {
-        let videos: LossyArray<PHNetworkVideo>?
-    }
-
-    func search(_ r: SearchRequest) async throws -> [VideoResult] {
-        let ordering: String? = {
-            switch r.filters.sort {
-            case .relevance: return nil
-            case .mostViewed: return "mostviewed"
-            case .newest: return "newest"
-            case .topRated: return "rating"
-            }
-        }()
-        guard let url = URL.make("https://www.pornhub.com/webmasters/search", [
-            "search": r.keyword, "page": String(r.page), "thumbsize": "large_hd", "ordering": ordering
-        ]) else { throw SearchError.invalidResponse }
-
-        let data = try await HTTPClient.shared.get(url, headers: ["Accept": "application/json"])
-        // "No videos found" comes back as {"code":"2001","message":...} — treat as empty.
-        guard let resp = try? JSONDecoder().decode(Response.self, from: data) else {
-            if String(decoding: data.prefix(400), as: UTF8.self).contains("\"code\"") { return [] }
-            throw SearchError.decoding
-        }
-        return (resp.videos?.items ?? []).compactMap { $0.toResult(source: .pornhub, ratingScale: 1) }
-    }
-}
-
 /// RedTube is part of the Pornhub network and exposes the same webmaster API format.
 struct RedTubeService: SearchService {
     let source = SourceID.redtube

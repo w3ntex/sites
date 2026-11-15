@@ -91,6 +91,25 @@ struct HTTPClient: Sendable {
         return (data, http)
     }
 
+    /// application/x-www-form-urlencoded POST (used for OAuth token requests).
+    func postForm(_ url: URL, form: [String: String], headers: [String: String] = [:],
+                  userAgent: String = HTTPClient.mobileUA) async throws -> Data {
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        req.httpBody = form.map { k, v in
+            "\(k)=\(v.addingPercentEncoding(withAllowedCharacters: allowed) ?? v)"
+        }.joined(separator: "&").data(using: .utf8)
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw SearchError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw SearchError.http(http.statusCode) }
+        return data
+    }
+
     func get(_ url: URL, headers: [String: String] = [:], userAgent: String = HTTPClient.mobileUA) async throws -> Data {
         try await data(url, headers: headers, userAgent: userAgent).0
     }

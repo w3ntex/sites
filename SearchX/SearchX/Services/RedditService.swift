@@ -77,20 +77,36 @@ struct RedditService: SearchService {
         let prevGlobal = r.page > 1 ? await Cursor.shared.get("g|\(r.keyword)|\(sort)|\(r.page - 1)") : nil
         if r.page > 1 && prevPriority == nil && prevGlobal == nil { return [] }
 
-        let priorityURL = URL.make("https://www.reddit.com/r/\(subs)/search.json", [
+        // Signed in → official OAuth API (works reliably, NSFW per account setting).
+        // Otherwise → anonymous JSON, which Reddit often blocks with 403.
+        let token = try await RedditTokenStore.shared.validToken()
+        let base = token == nil ? "https://www.reddit.com" : "https://oauth.reddit.com"
+        let ext = token == nil ? ".json" : ""
+        let auth: Auth = token.map { .bearer($0) } ?? .anonymous
+
+        let priorityURL = URL.make("\(base)/r/\(subs)/search\(ext)", [
             "q": r.keyword, "restrict_sr": "on", "include_over_18": "on", "limit": "50", "sort": sort, "t": "all",
             "raw_json": "1", "after": prevPriority
         ])
-        let globalURL = URL.make("https://www.reddit.com/search.json", [
+        let globalURL = URL.make("\(base)/search\(ext)", [
             "q": r.keyword, "type": "link", "include_over_18": "on", "limit": "50", "sort": sort, "t": "all",
             "raw_json": "1", "after": prevGlobal
         ])
 
-        async let priority = fetch(priorityURL, skip: r.page > 1 && prevPriority == nil)
-        async let global = fetch(globalURL, skip: r.page > 1 && prevGlobal == nil)
+        async let priority = fetch(priorityURL, auth: auth, skip: r.page > 1 && prevPriority == nil)
+        async let global = fetch(globalURL, auth: auth, skip: r.page > 1 && prevGlobal == nil)
         let (p, g) = await (priority, global)
 
-        if case .failure(let e) = p, case .failure = g { throw e }
+        if case .failure(let e) = p, case .failure = g {
+            if case .bearer = auth, case SearchError.http(401)? = e as? SearchError {
+                await RedditTokenStore.shared.invalidateAccessToken()   // refreshed on next search
+            }
+            if case .anonymous = auth, let se = e as? SearchError, se == .http(403) || se == .http(429) || se == .http(401) {
+                throw SearchError.missingCredentials(
+                    "a Reddit login — Reddit blocks anonymous apps. Connect your account")
+            }
+            throw e
+        }
         let pList = (try? p.get()) ?? ([], nil)
         let gList = (try? g.get()) ?? ([], nil)
         await Cursor.shared.set(priorityKey, pList.1)
@@ -100,13 +116,21 @@ struct RedditService: SearchService {
         return (pList.0 + gList.0).filter { seen.insert($0.id).inserted }
     }
 
-    private func fetch(_ url: URL?, skip: Bool) async -> Result<([VideoResult], String?), Error> {
+    private enum Auth { case anonymous, bearer(String) }
+
+    private func fetch(_ url: URL?, auth: Auth, skip: Bool) async -> Result<([VideoResult], String?), Error> {
         guard !skip else { return .success(([], nil)) }
         guard let url else { return .failure(SearchError.invalidResponse) }
         do {
-            let listing = try await HTTPClient.shared.json(
-                Listing.self, from: url,
-                userAgent: "ios:com.searchx.app:v1.0 (by /u/searchx_app)")
+            let listing: Listing
+            switch auth {
+            case .bearer(let token):
+                listing = try await HTTPClient.shared.json(
+                    Listing.self, from: url, headers: ["Authorization": "Bearer \(token)"],
+                    userAgent: RedditTokenStore.userAgent)
+            case .anonymous:
+                listing = try await HTTPClient.shared.json(Listing.self, from: url, userAgent: HTTPClient.desktopUA)
+            }
             let posts = listing.data?.children?.items.map(\.data) ?? []
             return .success((posts.compactMap(Self.convert), listing.data?.after))
         } catch {

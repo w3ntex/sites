@@ -21,6 +21,8 @@ final class SearchAggregator: ObservableObject {
     @Published private(set) var creators: [CreatorInfo] = []
     /// Lowercased creator keys the user picked; empty = show everyone.
     @Published private(set) var selectedCreators: Set<String> = []
+    /// Sources picked with the chips above the results; empty = show all sources.
+    @Published private(set) var visibleSources: Set<SourceID> = []
 
     struct CreatorInfo: Identifiable, Hashable {
         let key: String
@@ -43,7 +45,7 @@ final class SearchAggregator: ObservableObject {
     private var task: Task<Void, Never>?
 
     init(services: [any SearchService] = [
-        PornhubService(), XVideosService(), XHamsterService(), RedTubeService(),
+        XVideosService(), XHamsterService(), RedTubeService(),
         Rule34Service(), RedGIFsService(), XcomService(), RedditService()
     ]) {
         self.services = Dictionary(uniqueKeysWithValues: services.map { ($0.source, $0) })
@@ -111,6 +113,21 @@ final class SearchAggregator: ObservableObject {
         }
     }
 
+    // MARK: Source chips
+
+    func toggleVisibleSource(_ src: SourceID) {
+        if visibleSources.contains(src) { visibleSources.remove(src) } else { visibleSources.insert(src) }
+        Haptics.selection()
+        withAnimation(.easeOut(duration: 0.2)) { rebuild() }
+    }
+
+    func showAllSources() {
+        guard !visibleSources.isEmpty else { return }
+        visibleSources = []
+        Haptics.selection()
+        withAnimation(.easeOut(duration: 0.2)) { rebuild() }
+    }
+
     // MARK: Creators
 
     func toggleCreator(_ key: String) {
@@ -135,6 +152,7 @@ final class SearchAggregator: ObservableObject {
     func clear() {
         task?.cancel()
         selectedCreators = []
+        visibleSources = []
         creators = []
         query = ""
         results = []
@@ -156,6 +174,7 @@ final class SearchAggregator: ObservableObject {
         results = []
         errorMessage = nil
         selectedCreators = []
+        visibleSources = []
         creators = []
         isLoading = true
         isLoadingMore = false
@@ -218,8 +237,10 @@ final class SearchAggregator: ObservableObject {
     private func rebuild() {
         let order = SourceID.allCases
         var seenPages = Set<String>()
+        let shown = visibleSources
         let filtered: [[VideoResult]] = order.map { src in
-            (rawBySource[src] ?? []).filter { filters.matches($0) && seenPages.insert($0.pageURL.absoluteString).inserted }
+            guard shown.isEmpty || shown.contains(src) else { return [] }
+            return (rawBySource[src] ?? []).filter { filters.matches($0) && seenPages.insert($0.pageURL.absoluteString).inserted }
         }
         updateCreators(from: filtered.flatMap { $0 })
         let selected = selectedCreators

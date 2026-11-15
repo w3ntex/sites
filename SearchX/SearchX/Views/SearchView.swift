@@ -201,6 +201,18 @@ struct SourceStatusBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if !aggregator.visibleSources.isEmpty {
+                    Button {
+                        aggregator.showAllSources()
+                    } label: {
+                        Label("All", systemImage: "xmark")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .background(Theme.surfaceHigh, in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
                 ForEach(SourceID.allCases.filter { aggregator.sourceStates[$0] != nil }) { src in
                     chip(src, aggregator.sourceStates[src]!)
                 }
@@ -218,8 +230,11 @@ struct SourceStatusBar: View {
 
     @ViewBuilder
     private func chip(_ src: SourceID, _ state: SearchAggregator.SourceState) -> some View {
+        let selected = aggregator.visibleSources.contains(src)
         Button {
+            // Failed sources explain why; others toggle "show only these sources".
             if case .failed(let m) = state { detail = (src, m); Haptics.light() }
+            else { aggregator.toggleVisibleSource(src) }
         } label: {
             HStack(spacing: 4) {
                 Circle().fill(src.color).frame(width: 6, height: 6)
@@ -235,8 +250,10 @@ struct SourceStatusBar: View {
             }
             .font(.caption.weight(.medium))
             .padding(.horizontal, 9).padding(.vertical, 5)
-            .background(Theme.surface, in: Capsule())
+            .background(selected ? src.color.opacity(0.3) : Theme.surface, in: Capsule())
+            .overlay(Capsule().stroke(selected ? src.color : .clear, lineWidth: 1.5))
             .foregroundStyle(.white)
+            .opacity(aggregator.visibleSources.isEmpty || selected ? 1 : 0.5)
         }
         .buttonStyle(.plain)
     }

@@ -83,6 +83,21 @@ struct SearchFilters: Codable, Equatable, Hashable, Sendable {
     var sort: SortOrder = .relevance
     var enabledSources: Set<SourceID> = Set(SourceID.allCases)
 
+    init() {}
+
+    private enum CodingKeys: String, CodingKey { case media, duration, quality, sort, enabledSources }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        media = (try? c.decode(MediaFilter.self, forKey: .media)) ?? .all
+        duration = (try? c.decode(DurationFilter.self, forKey: .duration)) ?? .any
+        quality = (try? c.decode(QualityFilter.self, forKey: .quality)) ?? .any
+        sort = (try? c.decode(SortOrder.self, forKey: .sort)) ?? .relevance
+        // Unknown (removed) sources are ignored instead of failing the whole decode.
+        let raw = (try? c.decode([String].self, forKey: .enabledSources)) ?? SourceID.allCases.map(\.rawValue)
+        enabledSources = Set(raw.compactMap(SourceID.init(rawValue:)))
+    }
+
     /// Duration only makes sense for videos.
     var durationApplies: Bool { media == .all || media == .videos }
 
