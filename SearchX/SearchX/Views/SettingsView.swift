@@ -336,32 +336,54 @@ struct SourcesSettingsView: View {
 
 struct RedditAccountSection: View {
     @EnvironmentObject private var settings: AppSettings
+    @State private var webLoggedIn = false
+    @State private var showLogin = false
+    @State private var showAPI = false
     @State private var busy = false
     @State private var error: String?
 
     var body: some View {
         Section {
-            if let user = settings.redditUsername, RedditTokenStore.isSignedIn {
-                Label("Connected as u/\(user)", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                Button("Disconnect", role: .destructive) {
+            if webLoggedIn {
+                Label("Logged in to Reddit", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                Button("Log out of Reddit", role: .destructive) {
                     Task {
-                        await RedditTokenStore.shared.signOut()
-                        settings.redditUsername = nil
+                        await RedditWebBridge.logOut()
+                        webLoggedIn = await RedditWebBridge.isLoggedIn()
                         Haptics.light()
                     }
                 }
             } else {
-                TextField("Client ID", text: $settings.redditClientID)
                 Button {
-                    Task { await connect() }
+                    showLogin = true
                 } label: {
-                    HStack {
-                        Label("Connect Reddit account", systemImage: "person.crop.circle.badge.checkmark")
-                        if busy { Spacer(); ProgressView() }
-                    }
+                    Label("Log in to Reddit", systemImage: "person.crop.circle.badge.checkmark")
                 }
-                .disabled(busy || settings.redditClientID.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            DisclosureGroup("Developer API (optional)", isExpanded: $showAPI) {
+                if let user = settings.redditUsername, RedditTokenStore.isSignedIn {
+                    Label("API connected as u/\(user)", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                    Button("Disconnect API", role: .destructive) {
+                        Task {
+                            await RedditTokenStore.shared.signOut()
+                            settings.redditUsername = nil
+                        }
+                    }
+                } else {
+                    TextField("Client ID", text: $settings.redditClientID)
+                    Button {
+                        Task { await connectAPI() }
+                    } label: {
+                        HStack {
+                            Text("Connect with client ID")
+                            if busy { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(busy || settings.redditClientID.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Text("Only if Reddit approved an API app for you (installed app, redirect uri searchx://reddit-auth).")
+                        .font(.caption).foregroundStyle(Theme.secondaryText)
+                }
             }
             if let error {
                 Text(error).font(.footnote).foregroundStyle(.yellow)
@@ -369,16 +391,15 @@ struct RedditAccountSection: View {
         } header: {
             Text("Reddit")
         } footer: {
-            Text("""
-            1. On reddit.com (logged in), open reddit.com/prefs/apps → “create another app…”.
-            2. Name: SearchX · type: **installed app** · redirect uri: **searchx://reddit-auth** → create.
-            3. Copy the ID shown under the app name, paste it above, tap Connect.
-            Turn on “Show mature content” in your Reddit settings to get NSFW results.
-            """)
+            Text("Log in with your normal Reddit account — searches then use your own session, like the website. Enable “Show mature content” in your Reddit account settings for NSFW results.")
+        }
+        .task { webLoggedIn = await RedditWebBridge.isLoggedIn() }
+        .sheet(isPresented: $showLogin) {
+            RedditWebLoginView { ok in webLoggedIn = ok }
         }
     }
 
-    private func connect() async {
+    private func connectAPI() async {
         busy = true
         error = nil
         defer { busy = false }

@@ -77,8 +77,7 @@ struct RedditService: SearchService {
         let prevGlobal = r.page > 1 ? await Cursor.shared.get("g|\(r.keyword)|\(sort)|\(r.page - 1)") : nil
         if r.page > 1 && prevPriority == nil && prevGlobal == nil { return [] }
 
-        // Signed in → official OAuth API (works reliably, NSFW per account setting).
-        // Otherwise → anonymous JSON, which Reddit often blocks with 403.
+        // OAuth API if a developer client ID was connected; otherwise the user's Reddit web session.
         let token = try await RedditTokenStore.shared.validToken()
         let base = token == nil ? "https://www.reddit.com" : "https://oauth.reddit.com"
         let ext = token == nil ? ".json" : ""
@@ -102,8 +101,8 @@ struct RedditService: SearchService {
                 await RedditTokenStore.shared.invalidateAccessToken()   // refreshed on next search
             }
             if case .anonymous = auth, let se = e as? SearchError, se == .http(403) || se == .http(429) || se == .http(401) {
-                throw SearchError.missingCredentials(
-                    "a Reddit login — Reddit blocks anonymous apps. Connect your account")
+                throw SearchError.unavailable(
+                    "Reddit blocked the request. Log in to Reddit in Settings → Sources → Reddit, then search again.")
             }
             throw e
         }
@@ -129,7 +128,10 @@ struct RedditService: SearchService {
                     Listing.self, from: url, headers: ["Authorization": "Bearer \(token)"],
                     userAgent: RedditTokenStore.userAgent)
             case .anonymous:
-                listing = try await HTTPClient.shared.json(Listing.self, from: url, userAgent: HTTPClient.desktopUA)
+                // Through the user's Reddit web session (hidden WKWebView), not URLSession.
+                let data = try await RedditWebBridge.shared.get(url)
+                guard let decoded = try? JSONDecoder().decode(Listing.self, from: data) else { throw SearchError.decoding }
+                listing = decoded
             }
             let posts = listing.data?.children?.items.map(\.data) ?? []
             return .success((posts.compactMap(Self.convert), listing.data?.after))

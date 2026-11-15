@@ -68,7 +68,7 @@ enum SourceID: String, CaseIterable, Codable, Identifiable, Hashable, Sendable {
         case .rule34: return "Requires a free API key + user ID (rule34.xxx → My Account → Options)."
         case .redgifs: return "Uses a free temporary token automatically; you can paste your own."
         case .xcom: return "X requires login for search, so results come from public Nitter instances (best effort — many are down or behind anti-bot checks)."
-        case .reddit: return "Connect your Reddit account below — Reddit blocks most anonymous apps. Only NSFW posts are shown."
+        case .reddit: return "Log in to Reddit below (your normal account) — Reddit blocks most anonymous apps. Only NSFW posts are shown."
         case .xhamster: return "Uses the JSON API, falling back to scraping."
         case .xvideos: return "Scrapes the public search page."
         default: return nil
