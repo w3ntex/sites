@@ -289,13 +289,18 @@ struct SourcesSettingsView: View {
             }
 
             Section {
-                SecureField("API key", text: $settings.rule34APIKey)
+                SecureField("API key (or paste the whole line)", text: $settings.rule34APIKey)
                 TextField("User ID", text: $settings.rule34UserID)
-                    .keyboardType(.numberPad)
+                    .keyboardType(.numbersAndPunctuation)
+                if !Credentials.rule34APIKey.isEmpty && !Credentials.rule34UserID.isEmpty {
+                    Label("Credentials detected (user \(Credentials.rule34UserID))", systemImage: "checkmark.seal.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.green)
+                }
             } header: {
                 Text("Rule34")
             } footer: {
-                Text("Get these at rule34.xxx → My Account → Options → API Access Credentials. Results are always limited to rating:explicit.")
+                Text("rule34.xxx → My Account → Options → API Access Credentials. You can paste the whole “&api_key=…&user_id=…” line into the API key field. Results are always limited to rating:explicit.")
             }
 
             Section {

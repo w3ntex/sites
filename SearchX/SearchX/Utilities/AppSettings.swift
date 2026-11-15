@@ -21,11 +21,25 @@ enum Credentials {
     static var redgifsToken: String {
         UserDefaults.standard.string(forKey: SettingsKeys.redgifsToken)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
+    /// Accepts either the bare values or the whole "&api_key=…&user_id=…" line copied from rule34.xxx
+    /// (pasted into either field), ignoring spaces/newlines the text box may add.
+    private static func rule34Field(_ name: String) -> String? {
+        for key in [SettingsKeys.rule34APIKey, SettingsKeys.rule34UserID] {
+            let raw = (UserDefaults.standard.string(forKey: key) ?? "").filter { !$0.isWhitespace }
+            if let value = Rx.first("\(name)=([^&]+)", in: raw) { return value }
+        }
+        return nil
+    }
+
     static var rule34APIKey: String {
-        UserDefaults.standard.string(forKey: SettingsKeys.rule34APIKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let v = rule34Field("api_key") { return v }
+        let raw = (UserDefaults.standard.string(forKey: SettingsKeys.rule34APIKey) ?? "").filter { !$0.isWhitespace }
+        return raw.contains("=") ? "" : raw
     }
     static var rule34UserID: String {
-        UserDefaults.standard.string(forKey: SettingsKeys.rule34UserID)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let v = rule34Field("user_id") { return v }
+        let raw = (UserDefaults.standard.string(forKey: SettingsKeys.rule34UserID) ?? "").filter { !$0.isWhitespace }
+        return raw.contains("=") ? "" : raw
     }
     static let defaultNitter = "nitter.net, nitter.poast.org, nitter.privacydev.net"
     static var nitterInstances: [String] {
