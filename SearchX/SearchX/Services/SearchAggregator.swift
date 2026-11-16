@@ -86,8 +86,30 @@ final class SearchAggregator: ObservableObject {
     func filtersChanged(_ newFilters: SearchFilters) {
         guard hasQuery else { filters = newFilters; return }
         guard newFilters != filters else { return }
-        // Several sources apply sort/duration/quality/media server-side, so re-query.
-        start(keyword: query, filters: newFilters)
+        let old = filters
+        filters = newFilters
+
+        // A different media type changes what every source must be asked for → new search.
+        if old.media != newFilters.media {
+            start(keyword: query, filters: newFilters)
+            return
+        }
+
+        // Sort / duration / quality: re-order and re-filter what's already loaded (no reload,
+        // creator and source selections are kept).
+        let oldActive = Set(old.activeSources)
+        let newActive = newFilters.activeSources
+        for removed in oldActive.subtracting(newActive) { sourceStates[removed] = nil }
+        let added = newActive.filter { !oldActive.contains($0) }
+        if !added.isEmpty {
+            // Only the newly enabled sources are fetched.
+            for a in added { sourceStates[a] = .loading; exhausted.remove(a); rawBySource[a] = nil }
+            let (q, p) = (query, page)
+            Task { [weak self] in
+                for pg in 1...max(1, p) { await self?.fetch(keyword: q, filters: newFilters, page: pg, only: added) }
+            }
+        }
+        withAnimation(.easeOut(duration: 0.25)) { rebuild() }
     }
 
     func refresh() async {
@@ -196,8 +218,8 @@ final class SearchAggregator: ObservableObject {
         }
     }
 
-    private func fetch(keyword: String, filters: SearchFilters, page: Int) async {
-        let sources = filters.activeSources.filter { !exhausted.contains($0) }
+    private func fetch(keyword: String, filters: SearchFilters, page: Int, only: [SourceID]? = nil) async {
+        let sources = (only ?? filters.activeSources).filter { !exhausted.contains($0) }
         let request = SearchRequest(keyword: keyword, page: page, filters: filters)
         for s in sources where page > 1 { sourceStates[s] = .loading }
 
@@ -239,8 +261,9 @@ final class SearchAggregator: ObservableObject {
         let order = SourceID.allCases
         var seenPages = Set<String>()
         let shown = visibleSources
+        let active = Set(filters.activeSources)
         let filtered: [[VideoResult]] = order.map { src in
-            guard shown.isEmpty || shown.contains(src) else { return [] }
+            guard active.contains(src), shown.isEmpty || shown.contains(src) else { return [] }
             return (rawBySource[src] ?? []).filter { filters.matches($0) && seenPages.insert($0.pageURL.absoluteString).inserted }
         }
         updateCreators(from: filtered.flatMap { $0 })
@@ -251,14 +274,17 @@ final class SearchAggregator: ObservableObject {
 
         switch filters.sort {
         case .relevance:
-            // Round-robin interleave keeps each source's own relevance ordering while mixing sources.
+            // Round-robin interleave keeps each source's own ranking while mixing sources,
+            // then results that actually match the query (title, tags, creators) move up.
             var merged: [VideoResult] = []
             var i = 0
             while perSource.contains(where: { i < $0.count }) {
                 for list in perSource where i < list.count { merged.append(list[i]) }
                 i += 1
             }
-            results = merged
+            let scorer = RelevanceScorer(query: query)
+            let scores = Dictionary(merged.map { ($0.id, scorer.score($0)) }, uniquingKeysWith: { a, _ in a })
+            results = merged.stableSorted { (scores[$0.id] ?? 0) > (scores[$1.id] ?? 0) }
         case .mostViewed:
             results = perSource.flatMap { $0 }.stableSorted { ($0.viewCount ?? $0.likes ?? -1) > ($1.viewCount ?? $1.likes ?? -1) }
         case .newest:
@@ -297,5 +323,45 @@ extension Array {
             if areInIncreasingOrder(b.element, a.element) { return false }
             return a.offset < b.offset
         }.map(\.element)
+    }
+}
+
+/// How well a result matches the query: whole phrase in the title counts most, then each
+/// query word found in title / tags / creators. Integer buckets keep the source mix stable.
+struct RelevanceScorer {
+    private let phrase: String
+    private let words: [String]
+    private static let stopwords: Set<String> = ["the", "a", "an", "and", "of", "with", "in", "on", "de", "la", "le", "les", "et", "du", "des"]
+
+    init(query: String) {
+        phrase = Self.normalize(query)
+        words = phrase.split(separator: " ").map(String.init)
+            .filter { $0.count > 1 && !Self.stopwords.contains($0) }
+    }
+
+    static func normalize(_ s: String) -> String {
+        s.lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    func score(_ r: VideoResult) -> Int {
+        guard !words.isEmpty else { return 0 }
+        let title = " " + Self.normalize(r.title) + " "
+        let meta = " " + Self.normalize((r.tags + r.creators).joined(separator: " ")) + " "
+        var score = 0
+        if words.count > 1, title.contains(" \(phrase) ") { score += 4 }
+        else if words.count > 1, meta.contains(" \(phrase) ") { score += 2 }
+        for w in words {
+            // Whole word, or a simple plural/prefix form ("tit" ↔ "tits").
+            if title.contains(" \(w) ") || title.contains(" \(w)s ") { score += 2 }
+            else if meta.contains(" \(w) ") || meta.contains(" \(w)s ") { score += 1 }
+            else if title.contains(w) { score += 1 }
+        }
+        return score
     }
 }

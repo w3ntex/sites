@@ -27,7 +27,33 @@ struct Rule34Service: SearchService {
     }
 
     func search(_ r: SearchRequest) async throws -> [VideoResult] {
-        var tags = Self.tags(from: r.keyword)
+        // "anime missionary": first try the single tag "anime_missionary", then fall back to
+        // the separate tags "anime" + "missionary" (and remember which one worked for paging).
+        let joined = Self.tags(from: r.keyword)
+        let words = r.keyword.split(whereSeparator: { $0.isWhitespace }).map { String($0).lowercased() }
+        let split = (!r.keyword.contains(",") && words.count > 1) ? words : nil
+        let key = r.keyword.lowercased()
+
+        if let split, await Rule34Mode.shared.usesSplit(key) {
+            return try await query(r, baseTags: split)
+        }
+        let first = try await query(r, baseTags: joined)
+        if first.isEmpty, r.page == 1, let split {
+            await Rule34Mode.shared.setSplit(key)
+            return try await query(r, baseTags: split)
+        }
+        return first
+    }
+
+    private actor Rule34Mode {
+        static let shared = Rule34Mode()
+        private var split = Set<String>()
+        func usesSplit(_ k: String) -> Bool { split.contains(k) }
+        func setSplit(_ k: String) { split.insert(k) }
+    }
+
+    private func query(_ r: SearchRequest, baseTags: [String]) async throws -> [VideoResult] {
+        var tags = baseTags
         tags.append("rating:explicit")
         tags += ContentSafety.booruNegativeTags.map { "-" + $0 }
         switch r.filters.media {
