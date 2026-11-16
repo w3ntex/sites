@@ -92,6 +92,7 @@ final class SearchAggregator: ObservableObject {
 
     func refresh() async {
         guard hasQuery else { return }
+        await HTTPClient.clearCache()
         start(keyword: query, filters: filters)
         await task?.value
     }
