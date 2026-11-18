@@ -6,6 +6,7 @@ struct SearchView: View {
     @State private var text = ""
     @State private var viewer: ViewerRequest?
     @State private var toast: String?
+    @State private var tagSuggestions: [Rule34Service.TagSuggestion] = []
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,33 @@ struct SearchView: View {
                     Label(s.text, systemImage: s.isRecent ? "clock.arrow.circlepath" : "magnifyingglass")
                         .searchCompletion(s.text)
                 }
+                if !tagSuggestions.isEmpty {
+                    Section("Rule34 tags") {
+                        ForEach(tagSuggestions, id: \.self) { t in
+                            HStack {
+                                Label(t.tag.replacingOccurrences(of: "_", with: " "), systemImage: "tag")
+                                Spacer()
+                                if t.count > 0 {
+                                    Text(Format.compact(t.count) ?? "").foregroundStyle(Theme.secondaryText)
+                                }
+                            }
+                            .searchCompletion(t.tag.replacingOccurrences(of: "_", with: " "))
+                        }
+                    }
+                }
+            }
+            .task(id: text) {
+                // Debounced, like the site's tag autocomplete.
+                let q = text.trimmingCharacters(in: .whitespaces)
+                guard filterStore.current.enabledSources.contains(.rule34), q.count >= 2 else {
+                    tagSuggestions = []
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                let list = await Rule34Service.suggest(q)
+                guard !Task.isCancelled else { return }
+                tagSuggestions = Array(list.prefix(8))
             }
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)

@@ -46,7 +46,7 @@ final class SearchAggregator: ObservableObject {
 
     init(services: [any SearchService] = [
         XVideosService(), XHamsterService(), RedTubeService(),
-        Rule34Service(), RedGIFsService(), XcomService(), RedditService()
+        Rule34Service(), RedGIFsService(), RedditService()
     ]) {
         self.services = Dictionary(uniqueKeysWithValues: services.map { ($0.source, $0) })
     }
@@ -351,6 +351,15 @@ struct RelevanceScorer {
 
     func score(_ r: VideoResult) -> Int {
         guard !words.isEmpty else { return 0 }
+        if r.sourceID == .rule34 {
+            // Booru posts were fetched by exact tag, so every one matches: score them evenly
+            // (by tags, not the truncated title) to keep the site's own ordering.
+            let tags = " " + Self.normalize(r.tags.joined(separator: " ")) + " "
+            var score = 0
+            if words.count > 1, tags.contains(" \(phrase)") { score += 4 }
+            for w in words where tags.contains(" \(w)") { score += 2 }
+            return score
+        }
         let title = " " + Self.normalize(r.title) + " "
         let meta = " " + Self.normalize((r.tags + r.creators).joined(separator: " ")) + " "
         var score = 0

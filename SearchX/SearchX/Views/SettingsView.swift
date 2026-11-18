@@ -314,15 +314,6 @@ struct SourcesSettingsView: View {
 
             RedditAccountSection()
 
-            Section {
-                TextField("Instances", text: $settings.nitterInstances, axis: .vertical)
-                    .lineLimit(1...4)
-                Button("Reset to default instances") { settings.nitterInstances = Credentials.defaultNitter }
-            } header: {
-                Text("X (via Nitter)")
-            } footer: {
-                Text("Comma-separated Nitter hosts, tried in order. Public instances come and go — replace them if X results fail.")
-            }
         }
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)

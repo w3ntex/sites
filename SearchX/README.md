@@ -8,7 +8,7 @@ SearchX searches several adult sites at once and puts the results in one grid. I
 
 | # | Feature | Where |
 |---|---------|-------|
-| 1 | Unified search across xVideos, xHamster, RedTube, Rule34, RedGIFs, X (via Nitter) and Reddit. Results stream in per source, autocomplete comes from recent and popular searches, and results show in a 2-column grid with badges | `Services/*`, `Views/SearchView.swift`, `Views/ResultsGridView.swift` |
+| 1 | Unified search across xVideos, xHamster, RedTube, Rule34, RedGIFs and Reddit. Results stream in per source, autocomplete comes from recent and popular searches, and results show in a 2-column grid with badges | `Services/*`, `Views/SearchView.swift`, `Views/ResultsGridView.swift` |
 | 2 | Filter bar that persists between launches: media type, duration, quality, sort, and per-source checkboxes | `Views/FilterBar.swift`, `Models/SearchFilters.swift` |
 | 3 | Full-screen WKWebView player with native controls (play/pause, seek, ±10s, fullscreen, PiP), ad and popup blocking, and resume from the last position. Direct mp4s (RedGIFs, Reddit, Rule34) play in AVPlayer | `Views/VideoPlayerView.swift`, `Views/NativePlayerView.swift`, `Utilities/AdBlocker.swift` |
 | 4 | Detects age-verification pages (Yoti, AgeID, AgeVerif, VerifyMyAge, Go.cam) and shows a native prompt. You can verify in the Yoti app, in the app itself, or in an `SFSafariViewController`; the page reloads afterward | `Utilities/AgeGateDetector.swift`, `Views/AgeVerificationView.swift` |
@@ -41,9 +41,8 @@ Install the unsigned `SearchX.ipa` with AltStore, SideStore, Sideloadly or Troll
 | RedTube | Pornhub-network webmaster API (`api.redtube.com`) | |
 | xVideos | Scrapes the search page | Breaks if the page markup changes |
 | xHamster | `/api/front/search`, then falls back to the `window.initials` JSON in the search page | |
-| Rule34 | DAPI with `json=1` | **Requires a free API key and user ID** (Settings → Sources). Always adds `rating:explicit` plus negative tags for minors |
+| Rule34 | DAPI with `json=1` | **Requires a free API key and user ID** (Settings → Sources). Typed words are turned into real tags through the site's own autocomplete (e.g. `missionary` → `missionary_position`), and the search bar suggests tags with post counts like the site. Always adds `rating:explicit` plus negative tags for minors |
 | RedGIFs | v2 API | Fetches a free temporary token automatically; you can paste your own instead |
-| X | Nitter instances (configurable, xcancel.com first) | x.com search requires login, so this source is best effort and depends on public Nitter mirrors |
 | Reddit | OAuth API once you connect your account (Settings → Sources → Reddit); anonymous `search.json` otherwise | Reddit usually blocks anonymous apps (403), so connecting is recommended. Only `over_18` posts with media |
 
 Tap a source chip above the results to show only that source (tap several to combine). A chip with ⚠️ shows why that source failed.
