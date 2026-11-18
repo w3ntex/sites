@@ -51,6 +51,7 @@ enum SearchError: LocalizedError, Equatable {
             }
         }
         if error is DecodingError { return SearchError.decoding.errorDescription! }
+        if error is CancellationError { return "The request was interrupted. Pull down to retry." }
         return error.localizedDescription
     }
 }
@@ -181,4 +182,24 @@ actor ResponseCache {
     }
 
     func clear() { entries.removeAll() }
+}
+
+struct TimeoutError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
+/// Runs `operation`, failing with `message` if it takes longer than `seconds`.
+func withTimeout<T: Sendable>(_ seconds: Double, message: String,
+                              _ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await operation() }
+        group.addTask {
+            try await Task.sleep(for: .seconds(seconds))
+            throw TimeoutError(message: message)
+        }
+        defer { group.cancelAll() }
+        guard let first = try await group.next() else { throw TimeoutError(message: message) }
+        return first
+    }
 }

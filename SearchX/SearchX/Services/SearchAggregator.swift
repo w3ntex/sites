@@ -52,6 +52,13 @@ final class SearchAggregator: ObservableObject {
     }
 
     var hasQuery: Bool { !query.isEmpty }
+    /// True while any source is still fetching (initial search, newly enabled source, next page).
+    var isAnySourceLoading: Bool { sourceStates.values.contains(.loading) }
+    /// Chips shown above the results: only sources that are currently enabled.
+    var displayedSources: [SourceID] {
+        let active = Set(filters.activeSources)
+        return SourceID.allCases.filter { sourceStates[$0] != nil && active.contains($0) }
+    }
     var canLoadMore: Bool {
         hasQuery && !isLoading && !isLoadingMore && filters.activeSources.contains { !exhausted.contains($0) }
     }
@@ -99,7 +106,10 @@ final class SearchAggregator: ObservableObject {
         // creator and source selections are kept).
         let oldActive = Set(old.activeSources)
         let newActive = newFilters.activeSources
-        for removed in oldActive.subtracting(newActive) { sourceStates[removed] = nil }
+        for removed in oldActive.subtracting(newActive) {
+            sourceStates[removed] = nil
+            visibleSources.remove(removed)
+        }
         let added = newActive.filter { !oldActive.contains($0) }
         if !added.isEmpty {
             // Only the newly enabled sources are fetched.
@@ -228,7 +238,11 @@ final class SearchAggregator: ObservableObject {
                 guard let service = services[src] else { continue }
                 group.addTask {
                     do {
-                        return (src, .success(try await service.search(request)))
+                        // Hard cap so a stuck site never leaves its chip spinning forever.
+                        let items = try await withTimeout(35, message: "Timed out — \(src.displayName) didn't answer in 35 s.") {
+                            try await service.search(request)
+                        }
+                        return (src, .success(items))
                     } catch {
                         return (src, .failure(error))
                     }
@@ -243,7 +257,7 @@ final class SearchAggregator: ObservableObject {
                     rawBySource[src, default: []].append(contentsOf: safe)
                     sourceStates[src] = .done(count: rawBySource[src]?.count ?? 0)
                 case .failure(let error):
-                    if error is CancellationError { continue }
+                    if error is CancellationError && Task.isCancelled { continue }
                     exhausted.insert(src)
                     // Keep earlier pages' results visible; only report the error on the first page.
                     if page == 1 {

@@ -70,9 +70,11 @@ struct Rule34Service: SearchService {
         ].compactMap { $0 }
 
         for url in endpoints {
-            guard let data = try? await HTTPClient.shared.get(url, headers: [
-                "Accept": "application/json", "Referer": "https://rule34.xxx/"
-            ]), let items = try? JSONDecoder().decode(LossyArray<ACItem>.self, from: data).items else { continue }
+            guard let data = try? await withTimeout(6, message: "autocomplete timeout", {
+                try await HTTPClient.shared.get(url, headers: [
+                    "Accept": "application/json", "Referer": "https://rule34.xxx/"
+                ])
+            }), let items = try? JSONDecoder().decode(LossyArray<ACItem>.self, from: data).items else { continue }
             let list = items.compactMap { item -> TagSuggestion? in
                 guard let tag = item.value?.lowercased(), !tag.isEmpty else { return nil }
                 let count = item.label.flatMap { Rx.first(#"\((\d+)\)\s*$"#, in: $0) }.flatMap { Int($0) } ?? 0

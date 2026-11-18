@@ -80,7 +80,7 @@ struct SearchView: View {
                 text = term
                 submit()
             }
-        } else if aggregator.results.isEmpty && aggregator.isLoading {
+        } else if aggregator.results.isEmpty && (aggregator.isLoading || aggregator.isAnySourceLoading) {
             ScrollView {
                 SourceStatusBar()
                 SkeletonGrid()
@@ -241,7 +241,7 @@ struct SourceStatusBar: View {
                     }
                     .buttonStyle(.plain)
                 }
-                ForEach(SourceID.allCases.filter { aggregator.sourceStates[$0] != nil }) { src in
+                ForEach(aggregator.displayedSources) { src in
                     chip(src, aggregator.sourceStates[src]!)
                 }
             }
