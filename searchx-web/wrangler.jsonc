@@ -1,0 +1,15 @@
+{
+  // Cloudflare Worker that serves the SearchX web app (./public) and its search API (src/worker.js).
+  // Deploy: Cloudflare dashboard → Workers & Pages → Create → Import a repository (root: searchx-web).
+  "name": "searchx",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true }
+  // Optional secrets/vars (dashboard → Settings → Variables):
+  //   R34_API_KEY / R34_USER_ID  Rule34 credentials (otherwise sent by the app from its settings)
+  //   ACCESS_KEY                 if set, the app must send this key (Réglages → Serveur)
+}

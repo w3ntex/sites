@@ -29,6 +29,8 @@ open SearchX.xcodeproj     # run on a device/simulator, or:
 ./scripts/build_ipa.sh     # → build/SearchX.ipa (unsigned)
 ```
 
+**No PC at all?** See [`../searchx-web`](../searchx-web/README.md): the same app as a web app installed from Safari (no sideloading, no 7-day expiry).
+
 **Without a Mac:** every push that touches `SearchX/` runs the GitHub Actions workflow `.github/workflows/searchx-ios.yml`. It builds the unsigned IPA and uploads it as the build artifact **SearchX-unsigned-ipa**.
 
 ### Sideloading

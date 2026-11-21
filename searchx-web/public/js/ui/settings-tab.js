@@ -1,0 +1,243 @@
+import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
+import { Icon } from './icons.js';
+import { Group, Row, Switch, Sheet, SourceBadge, Spinner, cx } from './common.js';
+import { PinSetupSheet } from './lock.js';
+import { state, notify, updateSettings, openSheet, closeSheet, toast } from '../state.js';
+import { SOURCES, SOURCE_ORDER, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION } from '../config.js';
+import { setFilters, clearRecent } from '../search.js';
+import { clearHistory, exportData, importData } from '../library.js';
+import { searchSource, health } from '../api.js';
+import { biometricsAvailable, registerBiometrics } from '../lib/lock.js';
+import { applyInstallIcon, isStandalone } from '../lib/install.js';
+import { haptic } from '../lib/haptics.js';
+
+function parseR34(text) {
+  const t = String(text || '').replace(/\s+/g, '');
+  const key = (/api_key=([^&]+)/.exec(t) || [])[1];
+  const user = (/user_id=([^&]+)/.exec(t) || [])[1];
+  return { key: key || '', user: user || '' };
+}
+
+function Rule34Sheet() {
+  const s = state.settings;
+  const [line, setLine] = useState('');
+  const [key, setKey] = useState(s.r34key);
+  const [user, setUser] = useState(s.r34user);
+  const onPaste = v => {
+    setLine(v);
+    const p = parseR34(v);
+    if (p.key) setKey(p.key);
+    if (p.user) setUser(p.user);
+  };
+  const ok = key.trim() && user.trim();
+  return html`<${Sheet} title="Identifiants Rule34" onClose=${closeSheet}>${close => html`
+    <p class="sheet-text">Sur <b>rule34.xxx</b> → My Account → Options → <b>API Access Credentials</b> (coche « Generate New Key » puis Save si c'est vide). Copie toute la ligne et colle-la ici :</p>
+    <textarea class="field" rows="3" placeholder="&api_key=…&user_id=…" value=${line} onInput=${e => onPaste(e.currentTarget.value)}
+      autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    <label class="field-label">Clé API</label>
+    <input class="field" type="text" value=${key} onInput=${e => setKey(e.currentTarget.value.trim())} autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <label class="field-label">User ID</label>
+    <input class="field" type="text" inputmode="numeric" value=${user} onInput=${e => setUser(e.currentTarget.value.trim())} />
+    ${ok && html`<p class="ok-line"><${Icon} name="check" size=${16} /> Identifiants détectés (utilisateur ${user})</p>`}
+    <div class="sheet-buttons col">
+      <button type="button" class="btn" disabled=${!ok && !(s.r34key || s.r34user)}
+        onClick=${() => { updateSettings({ r34key: key.trim(), r34user: user.trim() }); toast(ok ? 'Rule34 configuré' : 'Identifiants effacés'); close(); }}>
+        ${ok ? 'Enregistrer' : 'Effacer les identifiants'}
+      </button>
+    </div>`}<//>`;
+}
+
+function TestSheet() {
+  const [rows, setRows] = useState(() => Object.fromEntries(SOURCE_ORDER.map(s => [s, { state: 'loading' }])));
+  useEffect(() => {
+    let alive = true;
+    for (const src of SOURCE_ORDER) {
+      const q = 'blonde';
+      const t0 = performance.now();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort('timeout'), 35000);
+      searchSource(src, { q, page: 1, sort: 'relevance', media: 'all', dur: 'any', hd: 'any', cursor: '', fresh: true }, ctrl.signal)
+        .then(r => ({ state: 'ok', count: r.items.length, ms: performance.now() - t0 }))
+        .catch(e => ({ state: 'error', error: ctrl.signal.reason === 'timeout' ? "Pas de réponse en 35 s." : e.message }))
+        .then(res => { clearTimeout(timer); if (alive) setRows(r => ({ ...r, [src]: res })); });
+    }
+    return () => { alive = false; };
+  }, []);
+  return html`<${Sheet} title="Test des sources" onClose=${closeSheet} tall>
+    <p class="sheet-text">Recherche « blonde » sur chaque source :</p>
+    <div class="test-list">
+      ${SOURCE_ORDER.map(src => {
+        const r = rows[src];
+        return html`<div class="test-row" key=${src}>
+          <${SourceBadge} src=${src} />
+          <div class="test-text">
+            <strong>${SOURCES[src].name}</strong>
+            ${r.state === 'ok' && html`<span class="good">${r.count} résultats · ${(r.ms / 1000).toFixed(1)} s</span>`}
+            ${r.state === 'error' && html`<span class="bad">${r.error}</span>`}
+            ${r.state === 'loading' && html`<span class="muted">Test en cours…</span>`}
+          </div>
+          ${r.state === 'loading' ? html`<${Spinner} />` : html`<${Icon} name=${r.state === 'ok' ? 'check' : 'warn'} size=${20} class=${r.state === 'ok' ? 'good' : 'bad'} />`}
+        </div>`;
+      })}
+    </div>
+  <//>`;
+}
+
+function ServerSheet() {
+  const [key, setKey] = useState(state.settings.accessKey);
+  const [info, setInfo] = useState(null);
+  const check = async () => {
+    setInfo({ state: 'loading' });
+    try { const h = await health(); setInfo({ state: 'ok', h }); } catch (e) { setInfo({ state: 'error', error: e.message }); }
+  };
+  useEffect(() => { check(); }, []);
+  return html`<${Sheet} title="Serveur SearchX" onClose=${closeSheet}>${close => html`
+    <div class="test-row">
+      <span class="row-icon" style="background:#30a46c"><${Icon} name="server" size=${17} /></span>
+      <div class="test-text">
+        <strong>${location.host}</strong>
+        ${info?.state === 'ok' && html`<span class="good">En ligne · version ${info.h.version}${info.h.locked ? ' · protégé par clé' : ''}</span>`}
+        ${info?.state === 'error' && html`<span class="bad">${info.error}</span>`}
+        ${info?.state === 'loading' && html`<span class="muted">Vérification…</span>`}
+      </div>
+    </div>
+    <label class="field-label">Clé d'accès (seulement si tu as défini ACCESS_KEY sur Cloudflare)</label>
+    <input class="field" type="text" value=${key} onInput=${e => setKey(e.currentTarget.value.trim())} autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <div class="sheet-buttons col">
+      <button type="button" class="btn" onClick=${() => { updateSettings({ accessKey: key }); check(); toast('Enregistré'); }}>Enregistrer et tester</button>
+    </div>`}<//>`;
+}
+
+async function exportBackup() {
+  const data = JSON.stringify(exportData(), null, 1);
+  const name = `searchx-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([data], name, { type: 'application/json' });
+  try {
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'Sauvegarde SearchX' }); return; }
+  } catch (e) {
+    if (e?.name === 'AbortError') return;
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+export function SettingsTab() {
+  const s = state.settings;
+  const [bioOK, setBioOK] = useState(false);
+  const fileRef = useRef(null);
+  useEffect(() => { biometricsAvailable().then(setBioOK); }, []);
+
+  const setPinEnabled = on => {
+    if (on) openSheet('custom', { render: () => html`<${PinSetupSheet} />` });
+    else { updateSettings({ pinHash: null, pinSalt: null, bioId: null }); toast('Verrouillage désactivé'); }
+  };
+  const setBio = async on => {
+    if (!on) { updateSettings({ bioId: null }); return; }
+    try {
+      const id = await registerBiometrics();
+      updateSettings({ bioId: id });
+      toast('Face ID activé');
+    } catch (e) {
+      toast(e?.name === 'NotAllowedError' ? 'Face ID annulé.' : `Face ID indisponible : ${e?.message || e}`);
+    }
+  };
+  const setIcon = key => {
+    haptic();
+    updateSettings({ installIcon: key });
+    applyInstallIcon(key);
+    toast(isStandalone() ? "Supprime l'icône actuelle puis ré-ajoute SearchX depuis Safari." : `Prêt : ajoute à l'écran d'accueil (« ${INSTALL_ICONS[key].name} »).`);
+  };
+  const toggleSource = (src, on) => {
+    const sources = on ? [...state.filters.sources, src] : state.filters.sources.filter(x => x !== src);
+    setFilters({ sources: SOURCE_ORDER.filter(x => sources.includes(x)) });
+    const d = state.defaultFilters;
+    d.sources = on ? [...new Set([...d.sources, src])] : d.sources.filter(x => x !== src);
+    try { localStorage.setItem('sx.defaultFilters', JSON.stringify(d)); } catch { /* ignore */ }
+    notify();
+  };
+  const onImport = async e => {
+    const f = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!f) return;
+    try {
+      const res = importData(JSON.parse(await f.text()));
+      toast(`Importé : ${res.favorites} favoris, ${res.playlists} playlists`);
+    } catch (err) {
+      toast(err.message || 'Fichier invalide.');
+    }
+  };
+  const clearCache = async () => {
+    try { for (const k of await caches.keys()) await caches.delete(k); } catch { /* ignore */ }
+    toast('Cache vidé, rechargement…');
+    setTimeout(() => location.reload(), 700);
+  };
+  const r34ok = s.r34key && s.r34user;
+
+  return html`<div class="tab">
+    <header class="topbar plain"><h1 class="page-title">Réglages</h1></header>
+    <main class="content settings">
+      ${!isStandalone() && html`<div class="install-card compact">
+        <div class="install-icon"><img src=${INSTALL_ICONS[s.installIcon]?.icon || 'icons/app-180.png'} alt="" /></div>
+        <div><strong>Installer l'app</strong><p>Safari → <span class="kbd"><${Icon} name="share" size=${13} /></span> → « Sur l'écran d'accueil ». Les réglages de l'app installée sont séparés de ceux de Safari.</p></div>
+      </div>`}
+
+      <${Group} title="Confidentialité" footer="Le code est demandé à chaque ouverture (selon le délai). Face ID utilise une clé d'accès stockée sur ton iPhone.">
+        <${Row} icon="lock" iconColor="#e5484d" title="Code de verrouillage" right=${html`<${Switch} checked=${Boolean(s.pinHash)} onChange=${setPinEnabled} label="Code" />`} />
+        ${s.pinHash && bioOK && html`<${Row} icon="faceid" iconColor="#30a46c" title="Face ID / Touch ID" right=${html`<${Switch} checked=${Boolean(s.bioId)} onChange=${setBio} label="Face ID" />`} />`}
+        ${s.pinHash && html`<${Row} icon="timer" iconColor="#8e4ec6" title="Verrouiller" chevron
+          right=${(LOCK_DELAYS.find(d => d[0] === s.lockDelay) || LOCK_DELAYS[0])[1]}
+          onClick=${() => openSheet('options', { title: 'Verrouiller', key: 'lock', options: LOCK_DELAYS, value: s.lockDelay, onPick: v => updateSettings({ lockDelay: v }) })} />`}
+        <${Row} icon="eye" iconColor="#3e63dd" title="Masquer dans le sélecteur d'apps" right=${html`<${Switch} checked=${s.blur} onChange=${v => updateSettings({ blur: v })} label="Masquer" />`} />
+      <//>
+
+      <${Group} title="Icône et nom sur l'écran d'accueil" footer="Choisis avant d'ajouter SearchX à l'écran d'accueil. Pour changer une icône déjà installée : supprime-la puis ré-ajoute depuis Safari (exporte d'abord tes favoris).">
+        <div class="icon-picker">
+          ${Object.entries(INSTALL_ICONS).map(([k, v]) => html`<button type="button" key=${k} class=${cx('icon-choice', s.installIcon === k && 'on')} onClick=${() => setIcon(k)}>
+            <img src=${v.icon} alt="" /><span>${v.name}</span>
+          </button>`)}
+        </div>
+      <//>
+
+      <${Group} title="Sources" footer="Les sources désactivées ne sont plus interrogées (et sont décochées dans les filtres par défaut).">
+        ${SOURCE_ORDER.map(src => html`<${Row} key=${src} title=${SOURCES[src].name} subtitle=${SOURCES[src].note}
+          lead=${html`<${SourceBadge} src=${src} />`}
+          right=${html`<${Switch} checked=${state.filters.sources.includes(src)} onChange=${on => toggleSource(src, on)} label=${SOURCES[src].name} />`} />`)}
+        <${Row} icon="key" iconColor=${r34ok ? '#46a758' : '#f76b15'} title="Identifiants Rule34" chevron
+          right=${r34ok ? `user ${s.r34user}` : 'À configurer'} onClick=${() => openSheet('custom', { render: () => html`<${Rule34Sheet} />` })} />
+        <${Row} icon="zap" iconColor="#ffb224" title="Tester toutes les sources" chevron onClick=${() => openSheet('custom', { render: () => html`<${TestSheet} />` })} />
+      <//>
+
+      <${Group} title="Lecture">
+        <${Row} icon="shield" iconColor="#30a46c" title="Bloquer pubs et pop-ups des lecteurs" subtitle="Désactivable vidéo par vidéo si un lecteur refuse de démarrer."
+          right=${html`<${Switch} checked=${s.sandbox} onChange=${v => updateSettings({ sandbox: v })} label="Anti-pubs" />`} />
+        <${Row} icon="play" iconColor="#e93d82" title="Lecture automatique des GIFs" right=${html`<${Switch} checked=${s.autoplayGifs} onChange=${v => updateSettings({ autoplayGifs: v })} label="Autoplay" />`} />
+        <${Row} icon="mute" iconColor="#6f6e77" title="GIFs sans le son" right=${html`<${Switch} checked=${s.muteGifs} onChange=${v => updateSettings({ muteGifs: v })} label="Muet" />`} />
+        <${Row} icon="hand" iconColor="#0091ff" title="Retour haptique" right=${html`<${Switch} checked=${s.haptics} onChange=${v => updateSettings({ haptics: v })} label="Haptique" />`} />
+      <//>
+
+      <${Group} title="Recherche">
+        <${Row} icon="sliders" iconColor="#3e63dd" title="Filtres par défaut" chevron onClick=${() => openSheet('filters', { target: 'default' })} />
+        <${Row} icon="clock" iconColor="#6f6e77" title="Effacer les recherches récentes" onClick=${() => { clearRecent(); toast('Recherches récentes effacées'); }} />
+      <//>
+
+      <${Group} title="Données" footer="Tout est stocké uniquement sur ce téléphone. Exporte une sauvegarde avant de réinstaller l'app.">
+        <${Row} icon="upload" iconColor="#0091ff" title="Exporter une sauvegarde" onClick=${exportBackup} />
+        <${Row} icon="download" iconColor="#0091ff" title="Importer une sauvegarde" onClick=${() => fileRef.current?.click()} />
+        <input ref=${fileRef} type="file" accept="application/json,.json" hidden onChange=${onImport} />
+        <${Row} icon="trash" iconColor="#e5484d" title="Effacer l'historique" danger
+          onClick=${() => openSheet('confirm', { title: "Effacer l'historique ?", text: "C'est définitif.", confirm: 'Effacer', onConfirm: () => { clearHistory(); toast('Historique effacé'); } })} />
+        <${Row} icon="refresh" iconColor="#6f6e77" title="Vider le cache de l'app" onClick=${clearCache} />
+      <//>
+
+      <${Group} title="Avancé">
+        <${Row} icon="server" iconColor="#30a46c" title="Serveur" chevron right=${location.host} onClick=${() => openSheet('custom', { render: () => html`<${ServerSheet} />` })} />
+      <//>
+
+      <p class="about">SearchX ${APP_VERSION} · réservé aux adultes (18+).<br />SearchX n'héberge aucun contenu : les résultats viennent de sites tiers.
+        Les contenus impliquant des mineurs sont toujours bloqués.</p>
+    </main>
+  </div>`;
+}

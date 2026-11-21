@@ -1,0 +1,120 @@
+import { html, useState, useCallback } from '../../vendor/preact-htm.mjs';
+import { Icon } from './icons.js';
+import { Segmented, EmptyState, Thumb, SwipeRow, SortableList, SourceBadge, cx } from './common.js';
+import { Grid } from './grid.js';
+import { openViewer } from './viewer.js';
+import { state, notify, openSheet } from '../state.js';
+import { createPlaylist, deletePlaylist, renamePlaylist, removeFromPlaylist, movePlaylistItem, movePlaylist, playlistById } from '../library.js';
+import { haptic } from '../lib/haptics.js';
+import { duration } from '../lib/format.js';
+import { SOURCES } from '../config.js';
+
+function Favorites() {
+  const onOpen = useCallback(item => { haptic(); openViewer(state.favorites, item.id); }, []);
+  const onLong = useCallback(item => openSheet('item', { item }), []);
+  if (!state.favorites.length) {
+    return html`<${EmptyState} icon="heart" title="Aucun favori"
+      text="Appuie longuement sur un résultat (ou touche ♥ dans le lecteur) pour l'ajouter ici." />`;
+  }
+  return html`<${Grid} items=${state.favorites} onOpen=${onOpen} onLongPress=${onLong}
+    footer=${html`<div class="list-end muted">${state.favorites.length} favori${state.favorites.length > 1 ? 's' : ''}</div>`} />`;
+}
+
+function newPlaylist() {
+  openSheet('prompt', {
+    title: 'Nouvelle playlist', placeholder: 'Nom de la playlist', confirm: 'Créer',
+    onSubmit: name => { createPlaylist(name); haptic(); }
+  });
+}
+
+function Playlists() {
+  const [edit, setEdit] = useState(false);
+  const lists = state.playlists;
+  return html`<div class="pl-page">
+    <div class="pl-toolbar">
+      <button type="button" class="btn small" onClick=${() => { haptic(); newPlaylist(); }}><${Icon} name="plus" size=${16} /> Nouvelle playlist</button>
+      ${lists.length > 1 && html`<button type="button" class="text-btn" onClick=${() => { haptic(); setEdit(!edit); }}>${edit ? 'OK' : 'Réorganiser'}</button>`}
+    </div>
+    ${!lists.length ? html`<${EmptyState} icon="list" title="Aucune playlist"
+        text="Crée une playlist, puis ajoute des vidéos depuis le menu d'un résultat (appui long)." />`
+      : edit ? html`<div class="list-card"><${SortableList} items=${lists} keyOf=${p => p.id} onMove=${movePlaylist}
+          renderItem=${(p, i, handle) => html`<div class="list-row">
+            <span class="pl-cover"><${Thumb} src=${p.items[0]?.thumb} /></span>
+            <span class="list-text"><strong>${p.name}</strong><small>${p.items.length} élément${p.items.length > 1 ? 's' : ''}</small></span>
+            <span class="handle" ...${handle}><${Icon} name="grip" size=${20} /></span>
+          </div>`} /></div>`
+      : html`<div class="list-card">${lists.map(p => html`<${SwipeRow} key=${p.id} onDelete=${() => confirmDeletePlaylist(p)}>
+          <button type="button" class="list-row tappable" onClick=${() => { haptic(); state.playlistId = p.id; notify(); }}>
+            <span class="pl-cover"><${Thumb} src=${p.items[0]?.thumb} /></span>
+            <span class="list-text"><strong>${p.name}</strong><small>${p.items.length} élément${p.items.length > 1 ? 's' : ''}</small></span>
+            <${Icon} name="chevronRight" size=${18} class="row-chevron" />
+          </button>
+        <//>`)}</div>`}
+  </div>`;
+}
+
+function confirmDeletePlaylist(p) {
+  openSheet('confirm', {
+    title: `Supprimer « ${p.name} » ?`, text: 'Les vidéos restent dans tes favoris et ton historique.',
+    confirm: 'Supprimer la playlist', onConfirm: () => deletePlaylist(p.id)
+  });
+}
+
+function PlaylistDetail({ playlist }) {
+  const [edit, setEdit] = useState(false);
+  const items = playlist.items;
+  const back = () => { haptic(); state.playlistId = null; notify(); };
+  const play = (id = items[0]?.id) => { if (!id) return; haptic(); openViewer(items, id); };
+  const menu = () => openSheet('options', {
+    title: playlist.name, key: `pl-${playlist.id}`, value: null,
+    options: [['rename', 'Renommer'], ['delete', 'Supprimer la playlist']],
+    onPick: v => {
+      if (v === 'rename') setTimeout(() => openSheet('prompt', { title: 'Renommer', value: playlist.name, confirm: 'Enregistrer', onSubmit: n => renamePlaylist(playlist.id, n) }), 240);
+      if (v === 'delete') setTimeout(() => confirmDeletePlaylist(playlist), 240);
+    }
+  });
+  const row = (it, handle) => html`<div class="list-row media-row">
+    <span class="mr-thumb"><${Thumb} src=${it.thumb} fallback=${it.thumb2} />
+      <em>${it.type === 'video' ? duration(it.dur) : it.type === 'gif' ? 'GIF' : 'IMG'}</em></span>
+    <span class="list-text"><strong class="two">${it.title}</strong>
+      <small><${SourceBadge} src=${it.src} small /> ${it.by?.[0] || SOURCES[it.src]?.name || ''}</small></span>
+    ${handle ? html`<span class="handle" ...${handle}><${Icon} name="grip" size=${20} /></span>` : null}
+  </div>`;
+  return html`<div class="pl-detail">
+    <div class="subnav">
+      <button type="button" class="back-btn" onClick=${back}><${Icon} name="chevronLeft" size=${22} /><span>Playlists</span></button>
+      <div class="subnav-right">
+        ${items.length > 1 && html`<button type="button" class="text-btn" onClick=${() => { haptic(); setEdit(!edit); }}>${edit ? 'OK' : 'Réorganiser'}</button>`}
+        <button type="button" class="icon-btn subtle" aria-label="Options" onClick=${() => { haptic(); menu(); }}><${Icon} name="more" size=${20} /></button>
+      </div>
+    </div>
+    <div class="pl-hero">
+      <div class="pl-hero-cover"><${Thumb} src=${items[0]?.thumb} /></div>
+      <div>
+        <h2>${playlist.name}</h2>
+        <p class="muted">${items.length} élément${items.length > 1 ? 's' : ''}</p>
+        ${items.length ? html`<button type="button" class="btn small" onClick=${() => play()}><${Icon} name="play" size=${15} /> Lire</button>` : null}
+      </div>
+    </div>
+    ${!items.length ? html`<${EmptyState} icon="listPlus" title="Playlist vide" text="Ajoute des vidéos depuis le menu d'un résultat (appui long)." />`
+      : edit ? html`<div class="list-card"><${SortableList} items=${items} keyOf=${i => i.id}
+          onMove=${(from, to) => movePlaylistItem(playlist.id, from, to)} renderItem=${(it, i, handle) => row(it, handle)} /></div>`
+      : html`<div class="list-card">${items.map(it => html`<${SwipeRow} key=${it.id} label="Retirer" onDelete=${() => removeFromPlaylist(playlist.id, it.id)}>
+          <button type="button" class="list-btn" onClick=${() => play(it.id)}>${row(it, null)}</button>
+        <//>`)}</div>`}
+  </div>`;
+}
+
+export function LibraryTab() {
+  const playlist = state.playlistId ? playlistById(state.playlistId) : null;
+  if (playlist) return html`<div class="tab"><header class="topbar plain"></header><main class="content"><${PlaylistDetail} playlist=${playlist} /></main></div>`;
+  const seg = state.libSegment;
+  return html`<div class="tab">
+    <header class="topbar plain">
+      <h1 class="page-title">${seg === 'favorites' ? 'Favoris' : 'Playlists'}</h1>
+      <${Segmented} value=${seg} onChange=${v => { state.libSegment = v; notify(); }}
+        options=${[['favorites', `Favoris${state.favorites.length ? ` (${state.favorites.length})` : ''}`], ['playlists', `Playlists${state.playlists.length ? ` (${state.playlists.length})` : ''}`]]} />
+    </header>
+    <main class=${cx('content', seg === 'favorites' && 'pad-top')}>${seg === 'favorites' ? html`<${Favorites} />` : html`<${Playlists} />`}</main>
+  </div>`;
+}
