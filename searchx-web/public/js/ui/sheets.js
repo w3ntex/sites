@@ -2,7 +2,7 @@ import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Sheet, Switch, SourceBadge, Thumb, cx } from './common.js';
 import { state, closeSheet, openSheet, toast, notify, updateSettings } from '../state.js';
-import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS } from '../config.js';
+import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl } from '../config.js';
 import { setFilters, resetFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch, disableSources } from '../search.js';
 import { toggleFavorite, isFavorite, addToPlaylist, createPlaylist } from '../library.js';
 import { downloadUrl } from '../api.js';
@@ -174,6 +174,8 @@ function SourceErrorSheet({ src }) {
     ${src === 'rule34' && /clé|API/i.test(per?.error || '') && html`<p class="sheet-text">Ajoute ta clé dans Réglages → Sources → Identifiants Rule34.</p>`}
     <div class="sheet-buttons col">
       <button type="button" class="btn" onClick=${() => { retrySource(src); close(); }}>Réessayer</button>
+      ${state.search.query && html`<a class="btn ghost" href=${siteSearchUrl(src, state.search.query)} target="_blank" rel="noopener noreferrer"
+        onClick=${() => haptic()}><${Icon} name="external" size=${16} /> Chercher « ${state.search.query} » sur ${SOURCES[src]?.name}</a>`}
       <button type="button" class="btn ghost" onClick=${() => { disableSources([src]); toast(`${SOURCES[src].name} désactivé`); close(); }}>Désactiver ${SOURCES[src]?.name}</button>
       ${src === 'rule34' && html`<button type="button" class="btn ghost" onClick=${() => { state.tab = 'settings'; close(); notify(); }}>Ouvrir les réglages</button>`}
     </div>`}<//>`;

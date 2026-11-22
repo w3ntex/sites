@@ -40,6 +40,9 @@ export function pageInfo(res, text = '') {
 /** Guess why a site sent an unexpected page, from its text. */
 export function explainPage(text) {
   const t = String(text || '').slice(0, 20000).toLowerCase();
+  if (/^\s*(<[^>]+>\s*)*please visit https?:\/\/www\.xvideos\.com/.test(t) || (t.length < 400 && t.includes('please visit https://www.xvideos.com'))) {
+    return "xVideos refuse les recherches venant de serveurs (il renvoie une page vide). Utilise « Chercher sur xVideos ».";
+  }
   if (/just a moment|cf-chl|challenge-platform|attention required|enable javascript and cookies/.test(t)) return 'Le site protège sa recherche par un contrôle anti-robot.';
   if (/not available in your (country|region)|unavailable in your (country|region)|restricted in your (country|region)|blocked in your country|indisponible dans votre pays/.test(t)) return "Le site n'est pas disponible depuis la région du serveur.";
   if (/age verification|verify your age|vérification de l'âge|vérifier votre âge|yoti|ageverif/.test(t)) return "Le site exige une vérification d'âge depuis la région du serveur.";
@@ -93,9 +96,13 @@ export async function upstream(url, { headers = {}, ua = DESKTOP_UA, timeout = 1
   }
   if (res.url && AGE_GATE_URL.test(res.url)) throw new UpstreamError('agegate', res.status, '', pageInfo(res, ''));
   if (!res.ok) {
-    if (res.status === 429 && !retried) {
-      await new Promise(r => setTimeout(r, 1500));
-      return upstream(url, { headers, ua, timeout, as, method, body, retried: true });
+    // Rate limited: wait (honouring Retry-After, max 4 s) and retry up to twice.
+    const attempt = typeof retried === 'number' ? retried : (retried ? 1 : 0);
+    if (res.status === 429 && attempt < 2) {
+      const ra = parseFloat(res.headers.get('retry-after') || '');
+      const wait = Math.min(4000, Number.isFinite(ra) && ra > 0 ? ra * 1000 : 1200 * (attempt + 1));
+      await new Promise(r => setTimeout(r, wait));
+      return upstream(url, { headers, ua, timeout, as, method, body, retried: attempt + 1 });
     }
     let text = '';
     try { text = await res.text(); } catch { /* ignore */ }

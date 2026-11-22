@@ -1,4 +1,4 @@
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.1.0';
 
 export const SOURCES = {
   xvideos: { name: 'xVideos', badge: 'XV', color: '#e5484d', types: ['video'], note: 'Recherche du site.' },
@@ -11,6 +11,23 @@ export const SOURCES = {
 };
 
 export const SOURCE_ORDER = Object.keys(SOURCES);
+
+/** The site's own search page for a query (fallback when a source can't be searched from here). */
+export function siteSearchUrl(src, q) {
+  const e = encodeURIComponent(q.trim());
+  const dashed = encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, '-'));
+  const tags = encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, '_'));
+  switch (src) {
+    case 'xvideos': return `https://www.xvideos.com/?k=${e}`;
+    case 'xhamster': return `https://xhamster.com/search/${e}`;
+    case 'redtube': return `https://www.redtube.com/?search=${e}`;
+    case 'eporner': return `https://www.eporner.com/search/${dashed}/`;
+    case 'rule34': return `https://rule34.xxx/index.php?page=post&s=list&tags=${tags}`;
+    case 'redgifs': return `https://www.redgifs.com/search?query=${e}`;
+    case 'reddit': return `https://www.reddit.com/search/?q=${e}&include_over_18=1`;
+    default: return null;
+  }
+}
 
 export const DEFAULT_FILTERS = { media: 'all', dur: 'any', hd: 'any', sort: 'relevance', sources: SOURCE_ORDER.slice() };
 

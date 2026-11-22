@@ -53,7 +53,7 @@ function TestSheet() {
   useEffect(() => {
     let alive = true;
     setRows(Object.fromEntries(SOURCE_ORDER.map(s => [s, { state: 'loading' }])));
-    if (run > 0) resetDirect();
+    resetDirect(); // really try the phone path again on every test
     for (const src of SOURCE_ORDER) {
       const t0 = performance.now();
       const ctrl = new AbortController();

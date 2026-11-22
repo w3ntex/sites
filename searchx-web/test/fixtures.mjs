@@ -174,6 +174,7 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
     if (host.endsWith('xvideos.com')) {
       if (failing('xvideos')) return text('busy', 429);
       if (failing('xvideos-challenge')) return text('<html><head><title>Just a moment...</title></head><body><div id="cf-chl">Checking</div></body></html>');
+      if (failing('xvideos-stub')) return text('Please visit https://www.xvideos.com');
       return text(xvideosHTML(24, base, (parseInt(url.searchParams.get('p') || '0', 10) || 0) + 1));
     }
     if (host.endsWith('xhamster.com')) {

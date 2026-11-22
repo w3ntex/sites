@@ -3,7 +3,7 @@ import { Icon } from './icons.js';
 import { Spinner, cx, EmptyState } from './common.js';
 import { Grid, SkeletonGrid, Strip } from './grid.js';
 import { state, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
-import { SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, SOURCE_ORDER, LAYOUTS } from '../config.js';
+import { SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, SOURCE_ORDER, LAYOUTS, siteSearchUrl } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
   toggleVisibleSource, showAllSources, clearCreators, clearRecent, isAnySourceLoading
@@ -123,7 +123,13 @@ function ResultsToolbar() {
   };
   const tags = activeSources().map(s => S.per[s]?.tags).find(Boolean);
   const showTags = tags && tags.length && tags.join(' ') !== S.query.toLowerCase().replace(/\s+/g, '_');
-  return html`<div class="results-bar">
+  const failed = activeSources().filter(s => S.per[s]?.state === 'error');
+  return html`${failed.length ? html`<div class="external-row">
+    <span>Pas dispo ici, ouvre la recherche sur :</span>
+    ${failed.map(src => html`<a key=${src} class="chip small ghost" href=${siteSearchUrl(src, S.query)} target="_blank" rel="noopener noreferrer"
+      onClick=${() => haptic()}><span>${SOURCES[src].name}</span><${Icon} name="external" size=${11} /></a>`)}
+  </div>` : null}
+  <div class="results-bar">
     <span class="rb-count">${S.results.length ? `${S.results.length} résultat${S.results.length > 1 ? 's' : ''}` : ''}
       ${showTags ? html`<small>Rule34 : ${tags.join(', ')}</small>` : null}</span>
     <button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier par', key: 'sort', options: SORT_OPTIONS, value: f.sort, onPick: v => setFilters({ sort: v }) }); }}>

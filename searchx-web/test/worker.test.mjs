@@ -240,3 +240,33 @@ test('worker reddit falls back to PullPush when Reddit refuses', async () => {
     globalThis.fetch = F.mockFetch('');
   }
 });
+
+test('worker explains the xVideos stub page served to servers', async () => {
+  globalThis.fetch = F.mockFetch('', { failSources: ['xvideos-stub'] });
+  try {
+    const x = await call('/api/search?src=xvideos&q=stub1');
+    assert.equal(x.body.ok, false);
+    assert.match(x.body.error, /xVideos refuse les recherches venant de serveurs/);
+  } finally {
+    globalThis.fetch = F.mockFetch('');
+  }
+});
+
+test('upstream retries twice on 429 then succeeds', async () => {
+  let calls = 0;
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => {
+    calls++;
+    return calls < 3
+      ? new Response('slow down', { status: 429, headers: { 'retry-after': '0.01' } })
+      : new Response('{"ok":1}', { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const { upstream } = await import('../src/lib.js');
+    const out = await upstream('https://example.test/x', { as: 'json' });
+    assert.equal(out.ok, 1);
+    assert.equal(calls, 3);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});

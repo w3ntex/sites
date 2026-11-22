@@ -5,6 +5,8 @@ import { REDGIFS_TOKEN_URL, redgifsSearchUrl, parseRedGifs, redgifsMore } from '
 let token = null;
 let tokenExpiry = 0;
 const TOKEN_KEY = 'https://cache.searchx/redgifs-token';
+// Like requests made by redgifs.com itself.
+const FIRST_PARTY = { Accept: 'application/json', Origin: 'https://www.redgifs.com', Referer: 'https://www.redgifs.com/' };
 
 async function bearer(env, force = false) {
   if (env?.REDGIFS_TOKEN) return env.REDGIFS_TOKEN;
@@ -17,7 +19,7 @@ async function bearer(env, force = false) {
       if (t) { token = t; tokenExpiry = Date.now() + 3600 * 1000; return t; }
     }
   }
-  const data = await upstream(REDGIFS_TOKEN_URL, { as: 'json', headers: { Accept: 'application/json' } });
+  const data = await upstream(REDGIFS_TOKEN_URL, { as: 'json', headers: FIRST_PARTY });
   if (!data?.token) throw new UpstreamError('auth', 0, 'RedGIFs a refusé de fournir un jeton.');
   token = data.token;
   tokenExpiry = Date.now() + 20 * 3600 * 1000;
@@ -28,7 +30,7 @@ async function bearer(env, force = false) {
 export async function search({ q, page, sort, media, env }) {
   const url = redgifsSearchUrl({ q, page, sort, media });
   const run = async force => upstream(url, {
-    as: 'json', headers: { Accept: 'application/json', Authorization: `Bearer ${await bearer(env, force)}` }
+    as: 'json', headers: { ...FIRST_PARTY, Authorization: `Bearer ${await bearer(env, force)}` }
   });
   let data;
   try {

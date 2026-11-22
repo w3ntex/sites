@@ -11,7 +11,7 @@ import {
 } from './shared/apis.js';
 import { isItemAllowed } from './shared/safety.js';
 
-const DIRECT_RETRY_MS = 6 * 3600 * 1000;
+const DIRECT_RETRY_MS = 3600 * 1000;
 const direct = load('direct', {}) || {};
 
 function canDirect(key) {
@@ -19,10 +19,25 @@ function canDirect(key) {
   return !d || d.ok || Date.now() - d.at > DIRECT_RETRY_MS;
 }
 
-function markDirect(key, ok) {
+/** Readable reason for a failed call made from the phone. */
+export function phoneReason(e) {
+  if (!e) return '';
+  if (e.status) return `HTTP ${e.status}${e.status === 429 ? ' (trop de requêtes)' : e.status === 403 ? ' (refusé)' : ''}`;
+  if (e.name === 'TypeError') return "le site n'autorise pas les appels depuis une app web";
+  if (e.name === 'TimeoutError' || e.name === 'AbortError') return 'pas de réponse à temps';
+  return e.message || String(e);
+}
+
+function markDirect(key, ok, err = null) {
   if (direct[key]?.ok === ok && ok) return;
-  direct[key] = { ok, at: Date.now() };
+  direct[key] = { ok, at: Date.now(), err: ok ? '' : phoneReason(err) };
   save('direct', direct);
+}
+
+function skippedError(key) {
+  const e = new Error(`${direct[key]?.err || 'échec récent'} (essai précédent)`);
+  e.skipped = true;
+  return e;
 }
 
 /** Forget which sources refused direct calls (Réglages → test). */
@@ -107,20 +122,27 @@ async function epornerDirect(p, signal) {
   return { items, more: epornerMore(data, p.page, items) };
 }
 
-async function pullpushDirect(p, signal) {
-  if (!canDirect('pullpush')) throw new Error('PullPush refuse le téléphone');
+async function pullpushDirect(p, signal, redditError = null) {
+  if (!canDirect('pullpush')) {
+    const e = skippedError('pullpush');
+    e.message = `Reddit : ${redditError ? phoneReason(redditError) : direct.reddit?.err || '?'} · PullPush : ${e.message}`;
+    throw e;
+  }
   try {
     const r = parsePullPush(await directJSON(pullpushUrl({ q: p.q, cursor: p.page > 1 ? p.cursor : '' }), signal));
     markDirect('pullpush', true);
     return r;
   } catch (e) {
-    if (!signal?.aborted) markDirect('pullpush', false);
-    throw e;
+    if (!signal?.aborted) markDirect('pullpush', false, e);
+    const out = new Error(`Reddit : ${redditError ? phoneReason(redditError) : direct.reddit?.err || 'ignoré'} · PullPush : ${phoneReason(e)}`);
+    out.name = e.name;
+    throw out;
   }
 }
 
 async function redditDirect(p, signal) {
   if (String(p.cursor || '').startsWith('pp:')) return pullpushDirect(p, signal);
+  let redditError = null;
   if (canDirect('reddit')) {
     try {
       const urls = redditUrls({ q: p.q, sort: p.sort, cursor: p.cursor, page: p.page });
@@ -132,10 +154,11 @@ async function redditDirect(p, signal) {
       return m;
     } catch (e) {
       if (signal?.aborted) throw e;
-      markDirect('reddit', false);
+      markDirect('reddit', false, e);
+      redditError = e;
     }
   }
-  return pullpushDirect(p, signal);
+  return pullpushDirect(p, signal, redditError);
 }
 
 const DIRECT = { redgifs: redgifsDirect, eporner: epornerDirect, reddit: redditDirect };
@@ -157,21 +180,25 @@ async function workerSearch(src, params, signal) {
 export async function searchSource(src, params, signal) {
   let directError = null;
   const fn = DIRECT[src];
-  if (fn && (src === 'reddit' || canDirect(src))) {
-    try {
-      const r = await fn(params, signal);
-      if (src !== 'reddit') markDirect(src, true);
-      return finish(src, r, 'phone');
-    } catch (e) {
-      if (signal?.aborted) throw e;
-      if (src !== 'reddit') markDirect(src, false);
-      directError = e;
+  if (fn) {
+    if (src === 'reddit' || canDirect(src)) {
+      try {
+        const r = await fn(params, signal);
+        if (src !== 'reddit') markDirect(src, true);
+        return finish(src, r, 'phone');
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        if (src !== 'reddit') markDirect(src, false, e);
+        directError = e;
+      }
+    } else {
+      directError = skippedError(src);
     }
   }
   try {
     return await workerSearch(src, params, signal);
   } catch (e) {
-    if (directError && !signal?.aborted) e.phone = directError.message || String(directError);
+    if (directError && !signal?.aborted) e.phone = src === 'reddit' ? directError.message : (directError.skipped ? directError.message : phoneReason(directError));
     throw e;
   }
 }
