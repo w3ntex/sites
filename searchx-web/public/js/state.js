@@ -97,6 +97,21 @@ export function lockNow() {
   notify();
 }
 
+// Connection settings survive a reset: they are not personal data, and re-entering an API key is a pain.
+const KEPT_ON_RESET = ['r34key', 'r34user', 'accessKey'];
+
+/** Last resort when locked out: erase everything personal stored by SearchX on this phone, then restart. */
+export async function resetEverything() {
+  const kept = {};
+  for (const k of KEPT_ON_RESET) if (state.settings[k]) kept[k] = state.settings[k];
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('sx.')) localStorage.removeItem(k);
+  } catch { /* ignore */ }
+  if (Object.keys(kept).length) save('settings', kept);
+  try { for (const k of await caches.keys()) await caches.delete(k); } catch { /* ignore */ }
+  location.reload();
+}
+
 export function updateSettings(patch) {
   Object.assign(state.settings, patch);
   save('settings', state.settings);

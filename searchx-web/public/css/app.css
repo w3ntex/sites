@@ -498,7 +498,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; font-family: ui
 .age-badge { font-size: 68px; font-weight: 900; color: var(--accent-2); letter-spacing: -.04em; line-height: 1; }
 .age-inner h1 { margin: 4px 0 0; font-size: 26px; }
 .age-inner p { margin: 0 0 18px; color: var(--text-2); font-size: 15px; }
-.privacy-cover { position: fixed; inset: 0; z-index: 150; background: #000; }
+.privacy-cover { position: fixed; inset: 0; z-index: 150; background: #000; pointer-events: none; }
 
 /* ---------- misc ---------- */
 .spinner {
@@ -514,7 +514,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; font-family: ui
    ===================================================================================== */
 
 /* Instant privacy cover (set directly on <html> when the app is left, before any re-render). */
-html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400; background: #000; }
+html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400; background: #000; pointer-events: none; }
 .privacy-cover { display: grid; place-items: center; }
 .privacy-cover img { width: 76px; height: 76px; border-radius: 18px; opacity: .9; }
 
@@ -647,3 +647,21 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 .external-row .chip { color: var(--text); }
 .external-row .chip .icon { color: var(--accent-2); }
 .sheet-buttons a.btn { text-align: center; }
+
+/* lock screen v2.3 */
+.lock-tap { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; flex: 1; border: 0; color: var(--text); background: transparent; }
+.lock-icon.pulse { animation: pulse 1.2s ease-in-out infinite; }
+.lock-msg { margin: 12px 24px 0; color: #ffb224; font-size: 14px; text-align: center; }
+.lock-links { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-bottom: 10px; }
+.muted-btn { color: var(--text-2); font-weight: 500; font-size: 14px; }
+.lock-help {
+  position: absolute; left: 16px; right: 16px; bottom: calc(var(--sab) + 16px); z-index: 2;
+  display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 18px; background: var(--surface-2);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, .6); animation: pop .18s ease-out;
+}
+.lock-help h3 { margin: 0 0 4px; font-size: 17px; text-align: center; }
+.lock-help .btn { width: 100%; }
+.danger-text { color: var(--bad); }
+.reset-confirm { display: flex; flex-direction: column; gap: 8px; }
+.reset-confirm p { margin: 0; font-size: 13.5px; color: var(--text-2); text-align: center; }
+.lock-screen { justify-content: space-between; }

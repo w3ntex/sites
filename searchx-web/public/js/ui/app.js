@@ -65,6 +65,20 @@ function setCover(on) {
   // Applied straight to the page (no re-render needed) so it is in place as early as possible.
   document.documentElement.classList.toggle('sx-cover', on);
   if (state.hidden !== on) { state.hidden = on; notify(); }
+  if (on) watchCover();
+}
+
+// Safety net: the cover only exists for the app-switcher snapshot. If the app is actually on
+// screen for a moment while covered (iOS didn't send the "back" events), remove it.
+let coverWatch = null;
+function watchCover() {
+  clearInterval(coverWatch);
+  let visibleFor = 0;
+  coverWatch = setInterval(() => {
+    if (!document.documentElement.classList.contains('sx-cover')) { clearInterval(coverWatch); return; }
+    visibleFor = document.visibilityState === 'visible' && !touchingEdge ? visibleFor + 300 : 0;
+    if (visibleFor >= 1500) { edgeCover = false; setCover(false); clearInterval(coverWatch); }
+  }, 300);
 }
 
 let hiddenAt = 0;
@@ -105,18 +119,30 @@ function installPrivacyHandlers() {
   // the bottom edge: cover the screen the instant a touch starts there, so the black screen is
   // already drawn when the snapshot is taken. A tap that stays in the app uncovers on release.
   window.addEventListener('touchstart', e => {
-    if (!state.settings.blur || authBusy) return;
     const t = e.touches[0];
-    if (!t || t.clientY < window.innerHeight - homeIndicatorZone()) return;
+    const atEdge = t && t.clientY >= window.innerHeight - homeIndicatorZone();
+    if (!atEdge) {
+      // The user is touching the app: it is on screen, never keep it covered.
+      touchingEdge = false;
+      if (document.documentElement.classList.contains('sx-cover') && document.visibilityState === 'visible') {
+        edgeCover = false;
+        setCover(false);
+      }
+      return;
+    }
+    if (!state.settings.blur || authBusy) return;
+    touchingEdge = true;
     edgeCover = true;
     setCover(true);
   }, { capture: true, passive: true });
   window.addEventListener('touchend', () => {
+    touchingEdge = false;
     if (!edgeCover) return;
     edgeCover = false;
     if (document.visibilityState === 'visible') setCover(false);
   }, { capture: true, passive: true });
   window.addEventListener('touchcancel', () => {
+    touchingEdge = false;
     // The system took the gesture (home / app switcher). If the user stays after all, uncover.
     if (!edgeCover) return;
     setTimeout(() => {
@@ -126,6 +152,7 @@ function installPrivacyHandlers() {
 }
 
 let edgeCover = false;
+let touchingEdge = false;
 let zoneCache = 0;
 
 /** Height of the home-indicator strip (bottom safe area), at least 20 px. */

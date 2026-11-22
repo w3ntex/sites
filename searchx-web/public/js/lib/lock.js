@@ -69,25 +69,38 @@ async function createCredential() {
 /** True while the Face ID sheet is on screen (it briefly blurs the page: don't treat that as leaving). */
 export let authBusy = false;
 
-/** Prompts Face ID / Touch ID for the stored passkey (iOS offers the device passcode as fallback). */
-export async function verifyBiometrics(id) {
+/**
+ * Prompts Face ID / Touch ID for the stored passkey (iOS offers the device passcode as fallback).
+ * Must be called synchronously from a tap: navigator.credentials.get() is the first thing it does.
+ */
+export function verifyBiometrics(id, signal) {
   authBusy = true;
+  let promise;
   try {
-    return await getAssertion(id);
-  } finally {
-    setTimeout(() => { authBusy = false; }, 800);
+    promise = navigator.credentials.get({
+      signal,
+      publicKey: {
+        challenge: randomBytes(32),
+        rpId: location.hostname,
+        allowCredentials: [{ type: 'public-key', id: fromB64url(id), transports: ['internal', 'hybrid'] }],
+        userVerification: 'required',
+        timeout: 30000
+      }
+    });
+  } catch (e) {
+    promise = Promise.reject(e);
   }
+  return promise.then(a => Boolean(a)).finally(() => { setTimeout(() => { authBusy = false; }, 800); });
 }
 
-async function getAssertion(id) {
-  const assertion = await navigator.credentials.get({
-    publicKey: {
-      challenge: randomBytes(32),
-      rpId: location.hostname,
-      allowCredentials: [{ type: 'public-key', id: fromB64url(id), transports: ['internal'] }],
-      userVerification: 'required',
-      timeout: 60000
-    }
-  });
-  return Boolean(assertion);
+/** Human explanation of a WebAuthn failure. */
+export function describeAuthError(e) {
+  switch (e?.name) {
+    case 'NotAllowedError': return 'Face ID annulé ou refusé.';
+    case 'AbortError': return 'Demande Face ID interrompue.';
+    case 'InvalidStateError': return 'Une demande Face ID était déjà en cours. Réessaie.';
+    case 'SecurityError': return "Face ID n'est pas autorisé pour cette adresse.";
+    case 'NotSupportedError': return "Face ID n'est pas disponible ici.";
+    default: return `Face ID : ${e?.message || e}`;
+  }
 }

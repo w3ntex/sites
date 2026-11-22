@@ -16,7 +16,7 @@ import * as rule34 from './sources/rule34.js';
 import * as redgifs from './sources/redgifs.js';
 import * as reddit from './sources/reddit.js';
 
-export const VERSION = '2.2.0';
+export const VERSION = '2.3.0';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit };
 const SORTS = new Set(['relevance', 'views', 'newest', 'rating']);
