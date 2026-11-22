@@ -4,6 +4,8 @@
   "name": "searchx",
   "main": "searchx-web/src/worker.js",
   "compatibility_date": "2025-09-01",
+  // Serve the app at https://searchx.<your-subdomain>.workers.dev
+  "workers_dev": true,
   "assets": {
     "directory": "./searchx-web/public",
     "binding": "ASSETS"
