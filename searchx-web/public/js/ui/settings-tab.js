@@ -2,11 +2,11 @@ import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Group, Row, Switch, Sheet, SourceBadge, Spinner, cx } from './common.js';
 import { PinSetupSheet } from './lock.js';
-import { state, notify, updateSettings, openSheet, closeSheet, toast } from '../state.js';
-import { SOURCES, SOURCE_ORDER, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION } from '../config.js';
-import { setFilters, clearRecent } from '../search.js';
+import { state, notify, updateSettings, openSheet, closeSheet, toast, lockEnabled, lockNow } from '../state.js';
+import { SOURCES, SOURCE_ORDER, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS } from '../config.js';
+import { setFilters, clearRecent, disableSources } from '../search.js';
 import { clearHistory, exportData, importData } from '../library.js';
-import { searchSource, health } from '../api.js';
+import { searchSource, health, resetDirect } from '../api.js';
 import { biometricsAvailable, registerBiometrics } from '../lib/lock.js';
 import { applyInstallIcon, isStandalone } from '../lib/install.js';
 import { haptic } from '../lib/haptics.js';
@@ -48,38 +48,52 @@ function Rule34Sheet() {
 }
 
 function TestSheet() {
+  const [run, setRun] = useState(0);
   const [rows, setRows] = useState(() => Object.fromEntries(SOURCE_ORDER.map(s => [s, { state: 'loading' }])));
   useEffect(() => {
     let alive = true;
+    setRows(Object.fromEntries(SOURCE_ORDER.map(s => [s, { state: 'loading' }])));
+    if (run > 0) resetDirect();
     for (const src of SOURCE_ORDER) {
-      const q = 'blonde';
       const t0 = performance.now();
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort('timeout'), 35000);
-      searchSource(src, { q, page: 1, sort: 'relevance', media: 'all', dur: 'any', hd: 'any', cursor: '', fresh: true }, ctrl.signal)
-        .then(r => ({ state: 'ok', count: r.items.length, ms: performance.now() - t0 }))
-        .catch(e => ({ state: 'error', error: ctrl.signal.reason === 'timeout' ? "Pas de réponse en 35 s." : e.message }))
+      searchSource(src, { q: 'blonde', page: 1, sort: 'relevance', media: 'all', dur: 'any', hd: 'any', cursor: '', fresh: true }, ctrl.signal)
+        .then(r => ({ state: r.items.length ? 'ok' : 'empty', count: r.items.length, ms: performance.now() - t0, via: r.via }))
+        .catch(e => ({ state: 'error', error: ctrl.signal.reason === 'timeout' ? 'Pas de réponse en 35 s.' : e.message, debug: e.debug, phone: e.phone }))
         .then(res => { clearTimeout(timer); if (alive) setRows(r => ({ ...r, [src]: res })); });
     }
     return () => { alive = false; };
-  }, []);
-  return html`<${Sheet} title="Test des sources" onClose=${closeSheet} tall>
-    <p class="sheet-text">Recherche « blonde » sur chaque source :</p>
+  }, [run]);
+  const failing = SOURCE_ORDER.filter(src => rows[src].state === 'error' || rows[src].state === 'empty');
+  const done = SOURCE_ORDER.every(src => rows[src].state !== 'loading');
+  const enabledFailing = failing.filter(src => state.filters.sources.includes(src));
+  return html`<${Sheet} title="Test des sources" onClose=${closeSheet} tall
+    actions=${html`<button type="button" class="text-btn" disabled=${!done} onClick=${() => { haptic(); setRun(n => n + 1); }}>Relancer</button>`}>
+    <p class="sheet-text">Recherche « blonde » sur chaque source. <b>Téléphone</b> = appel direct depuis ton iPhone, <b>serveur</b> = via Cloudflare.</p>
     <div class="test-list">
       ${SOURCE_ORDER.map(src => {
         const r = rows[src];
         return html`<div class="test-row" key=${src}>
           <${SourceBadge} src=${src} />
           <div class="test-text">
-            <strong>${SOURCES[src].name}</strong>
-            ${r.state === 'ok' && html`<span class="good">${r.count} résultats · ${(r.ms / 1000).toFixed(1)} s</span>`}
+            <strong>${SOURCES[src].name}${state.filters.sources.includes(src) ? '' : html` <small class="muted">(désactivée)</small>`}</strong>
+            ${r.state === 'ok' && html`<span class="good">${r.count} résultats · ${(r.ms / 1000).toFixed(1)} s · via ${r.via === 'phone' ? 'téléphone' : 'serveur'}</span>`}
+            ${r.state === 'empty' && html`<span class="bad">Aucun résultat (réponse vide) · via ${r.via === 'phone' ? 'téléphone' : 'serveur'}</span>`}
             ${r.state === 'error' && html`<span class="bad">${r.error}</span>`}
+            ${r.state === 'error' && (r.debug || r.phone) && html`<span class="debug">${r.phone ? `Téléphone : ${r.phone}. ` : ''}${r.debug ? `Serveur : ${r.debug}` : ''}</span>`}
             ${r.state === 'loading' && html`<span class="muted">Test en cours…</span>`}
           </div>
           ${r.state === 'loading' ? html`<${Spinner} />` : html`<${Icon} name=${r.state === 'ok' ? 'check' : 'warn'} size=${20} class=${r.state === 'ok' ? 'good' : 'bad'} />`}
         </div>`;
       })}
     </div>
+    ${done && enabledFailing.length ? html`<div class="sheet-buttons col">
+      <button type="button" class="btn ghost" onClick=${() => { haptic(); disableSources(enabledFailing); toast(`${enabledFailing.length} source${enabledFailing.length > 1 ? 's' : ''} désactivée${enabledFailing.length > 1 ? 's' : ''}`); }}>
+        Désactiver les sources en échec (${enabledFailing.map(s => SOURCES[s].name).join(', ')})
+      </button>
+    </div>` : null}
+    <p class="sheet-hint">Fais une capture de cet écran et envoie-la pour que les sources en échec soient corrigées.</p>
   <//>`;
 }
 
@@ -132,14 +146,14 @@ export function SettingsTab() {
 
   const setPinEnabled = on => {
     if (on) openSheet('custom', { render: () => html`<${PinSetupSheet} />` });
-    else { updateSettings({ pinHash: null, pinSalt: null, bioId: null }); toast('Verrouillage désactivé'); }
+    else { updateSettings({ pinHash: null, pinSalt: null }); toast(state.settings.bioId ? 'Code désactivé (Face ID reste actif)' : 'Verrouillage désactivé'); }
   };
   const setBio = async on => {
     if (!on) { updateSettings({ bioId: null }); return; }
     try {
       const id = await registerBiometrics();
-      updateSettings({ bioId: id });
-      toast('Face ID activé');
+      updateSettings({ bioId: id, lockDelay: state.settings.lockDelay || 0 });
+      toast("Face ID activé : demandé à chaque ouverture");
     } catch (e) {
       toast(e?.name === 'NotAllowedError' ? 'Face ID annulé.' : `Face ID indisponible : ${e?.message || e}`);
     }
@@ -184,13 +198,28 @@ export function SettingsTab() {
         <div><strong>Installer l'app</strong><p>Safari → <span class="kbd"><${Icon} name="share" size=${13} /></span> → « Sur l'écran d'accueil ». Les réglages de l'app installée sont séparés de ceux de Safari.</p></div>
       </div>`}
 
-      <${Group} title="Confidentialité" footer="Le code est demandé à chaque ouverture (selon le délai). Face ID utilise une clé d'accès stockée sur ton iPhone.">
-        <${Row} icon="lock" iconColor="#e5484d" title="Code de verrouillage" right=${html`<${Switch} checked=${Boolean(s.pinHash)} onChange=${setPinEnabled} label="Code" />`} />
-        ${s.pinHash && bioOK && html`<${Row} icon="faceid" iconColor="#30a46c" title="Face ID / Touch ID" right=${html`<${Switch} checked=${Boolean(s.bioId)} onChange=${setBio} label="Face ID" />`} />`}
-        ${s.pinHash && html`<${Row} icon="timer" iconColor="#8e4ec6" title="Verrouiller" chevron
+      <${Group} title="Sécurité" footer=${bioOK
+          ? "Face ID est demandé à l'ouverture et à chaque retour dans l'app. Si Face ID échoue, iOS propose le code de ton iPhone."
+          : "Face ID n'est pas disponible dans ce navigateur : installe l'app sur l'écran d'accueil depuis Safari pour l'utiliser."}>
+        <${Row} icon="faceid" iconColor="#30a46c" title="Face ID à l'ouverture"
+          subtitle=${bioOK ? null : 'Indisponible ici'}
+          right=${html`<${Switch} checked=${Boolean(s.bioId)} disabled=${!bioOK && !s.bioId} onChange=${setBio} label="Face ID" />`} />
+        <${Row} icon="lock" iconColor="#e5484d" title="Code SearchX" subtitle=${s.bioId ? 'Code à 4 chiffres en plus de Face ID' : 'Code à 4 chiffres'}
+          right=${html`<${Switch} checked=${Boolean(s.pinHash)} onChange=${setPinEnabled} label="Code" />`} />
+        ${lockEnabled() && html`<${Row} icon="timer" iconColor="#8e4ec6" title="Verrouiller" chevron
           right=${(LOCK_DELAYS.find(d => d[0] === s.lockDelay) || LOCK_DELAYS[0])[1]}
           onClick=${() => openSheet('options', { title: 'Verrouiller', key: 'lock', options: LOCK_DELAYS, value: s.lockDelay, onPick: v => updateSettings({ lockDelay: v }) })} />`}
-        <${Row} icon="eye" iconColor="#3e63dd" title="Masquer dans le sélecteur d'apps" right=${html`<${Switch} checked=${s.blur} onChange=${v => updateSettings({ blur: v })} label="Masquer" />`} />
+        <${Row} icon="eye" iconColor="#3e63dd" title="Masquer dans les apps récentes" subtitle="Écran noir dès que tu quittes l'app"
+          right=${html`<${Switch} checked=${s.blur} onChange=${v => updateSettings({ blur: v })} label="Masquer" />`} />
+        ${lockEnabled() && html`<${Row} icon="lock" iconColor="#6f6e77" title="Verrouiller maintenant" onClick=${lockNow} />`}
+      <//>
+
+      <${Group} title="Affichage">
+        <${Row} icon="layers" iconColor="#3e63dd" title="Disposition des résultats" chevron
+          right=${(LAYOUTS.find(l => l[0] === s.layout) || LAYOUTS[0])[1]}
+          onClick=${() => openSheet('options', { title: 'Disposition', key: 'layout', options: LAYOUTS, value: s.layout, onPick: v => updateSettings({ layout: v }) })} />
+        <${Row} icon="film" iconColor="#e93d82" title="Aperçus animés des GIFs" subtitle="Les GIFs bougent dans la grille (utilise plus de données)"
+          right=${html`<${Switch} checked=${s.previews} onChange=${v => updateSettings({ previews: v })} label="Aperçus" />`} />
       <//>
 
       <${Group} title="Icône et nom sur l'écran d'accueil" footer="Choisis avant d'ajouter SearchX à l'écran d'accueil. Pour changer une icône déjà installée : supprime-la puis ré-ajoute depuis Safari (exporte d'abord tes favoris).">
@@ -213,6 +242,8 @@ export function SettingsTab() {
       <${Group} title="Lecture">
         <${Row} icon="shield" iconColor="#30a46c" title="Bloquer pubs et pop-ups des lecteurs" subtitle="Désactivable vidéo par vidéo si un lecteur refuse de démarrer."
           right=${html`<${Switch} checked=${s.sandbox} onChange=${v => updateSettings({ sandbox: v })} label="Anti-pubs" />`} />
+        <${Row} icon="play" iconColor="#e5484d" title="Lecture automatique des vidéos" subtitle="Lance le lecteur dès que la vidéo s'affiche"
+          right=${html`<${Switch} checked=${s.autoplayVideos} onChange=${v => updateSettings({ autoplayVideos: v })} label="Autoplay vidéos" />`} />
         <${Row} icon="play" iconColor="#e93d82" title="Lecture automatique des GIFs" right=${html`<${Switch} checked=${s.autoplayGifs} onChange=${v => updateSettings({ autoplayGifs: v })} label="Autoplay" />`} />
         <${Row} icon="mute" iconColor="#6f6e77" title="GIFs sans le son" right=${html`<${Switch} checked=${s.muteGifs} onChange=${v => updateSettings({ muteGifs: v })} label="Muet" />`} />
         <${Row} icon="hand" iconColor="#0091ff" title="Retour haptique" right=${html`<${Switch} checked=${s.haptics} onChange=${v => updateSettings({ haptics: v })} label="Haptique" />`} />

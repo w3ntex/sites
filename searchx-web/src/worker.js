@@ -16,7 +16,7 @@ import * as rule34 from './sources/rule34.js';
 import * as redgifs from './sources/redgifs.js';
 import * as reddit from './sources/reddit.js';
 
-export const VERSION = '1.0.0';
+export const VERSION = '2.0.0';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit };
 const SORTS = new Set(['relevance', 'views', 'newest', 'rating']);
@@ -106,7 +106,10 @@ async function handleSearch(request, url, env, ctx) {
         200, { 'X-SX-Cacheable': '1' });
     } catch (e) {
       const status = e instanceof UpstreamError ? 502 : 500;
-      return json({ ok: false, src, error: friendlyMessage(e), kind: e?.kind || 'error', status: e?.status || 0 }, status);
+      return json({
+        ok: false, src, error: friendlyMessage(e), kind: e?.kind || 'error', status: e?.status || 0,
+        debug: String(e?.debug || e?.message || '').slice(0, 300)
+      }, status);
     }
   }, { fresh: params.get('fresh') === '1' });
 }

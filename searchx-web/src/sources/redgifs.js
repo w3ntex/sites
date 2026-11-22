@@ -1,25 +1,33 @@
-import { upstream, absUrl, num, UpstreamError } from '../lib.js';
+import { upstream, UpstreamError } from '../lib.js';
+import { REDGIFS_TOKEN_URL, redgifsSearchUrl, parseRedGifs, redgifsMore } from '../../public/js/shared/apis.js';
 
+// Server-side fallback (the app first calls RedGIFs straight from the phone).
 let token = null;
 let tokenExpiry = 0;
+const TOKEN_KEY = 'https://cache.searchx/redgifs-token';
 
 async function bearer(env, force = false) {
   if (env?.REDGIFS_TOKEN) return env.REDGIFS_TOKEN;
   if (!force && token && Date.now() < tokenExpiry) return token;
-  const data = await upstream('https://api.redgifs.com/v2/auth/temporary', { as: 'json', headers: { Accept: 'application/json' } });
+  const cache = typeof caches !== 'undefined' ? caches.default : null;
+  if (!force && cache) {
+    const hit = await cache.match(TOKEN_KEY);
+    if (hit) {
+      const t = await hit.text();
+      if (t) { token = t; tokenExpiry = Date.now() + 3600 * 1000; return t; }
+    }
+  }
+  const data = await upstream(REDGIFS_TOKEN_URL, { as: 'json', headers: { Accept: 'application/json' } });
   if (!data?.token) throw new UpstreamError('auth', 0, 'RedGIFs a refusé de fournir un jeton.');
   token = data.token;
   tokenExpiry = Date.now() + 20 * 3600 * 1000;
+  if (cache) await cache.put(TOKEN_KEY, new Response(token, { headers: { 'Cache-Control': 'max-age=3600' } }));
   return token;
 }
 
 export async function search({ q, page, sort, media, env }) {
-  const order = { relevance: 'trending', views: 'top', newest: 'latest', rating: 'best' }[sort] || 'trending';
-  const p = new URLSearchParams({ search_text: q, order, count: '40', page: String(page) });
-  if (media === 'image') p.set('type', 'i');
-  else if (media === 'gif' || media === 'video') p.set('type', 'g');
-
-  const run = async force => upstream(`https://api.redgifs.com/v2/gifs/search?${p}`, {
+  const url = redgifsSearchUrl({ q, page, sort, media });
+  const run = async force => upstream(url, {
     as: 'json', headers: { Accept: 'application/json', Authorization: `Bearer ${await bearer(env, force)}` }
   });
   let data;
@@ -30,38 +38,7 @@ export async function search({ q, page, sort, media, env }) {
     else throw e;
   }
   const items = parseRedGifs(data);
-  const pages = num(data?.pages);
-  return { items, more: pages != null ? page < pages : items.length >= 40 };
+  return { items, more: redgifsMore(data, page, items) };
 }
 
-export function parseRedGifs(data) {
-  const out = [];
-  for (const g of data?.gifs || []) {
-    const urls = g?.urls || {};
-    const thumb = absUrl(urls.poster) || absUrl(urls.thumbnail);
-    if (!g?.id || !thumb) continue;
-    const tags = Array.isArray(g.tags) ? g.tags.map(String) : [];
-    const isImage = num(g.type) === 2;
-    const title = (g.description && String(g.description).trim()) || tags.slice(0, 4).join(', ') || `@${g.userName || 'redgifs'}`;
-    out.push({
-      id: `redgifs:${g.id}`,
-      src: 'redgifs',
-      title,
-      dur: null,
-      thumb,
-      views: num(g.views),
-      rating: null,
-      likes: num(g.likes),
-      url: `https://www.redgifs.com/watch/${g.id}`,
-      type: isImage ? 'image' : 'gif',
-      media: absUrl(urls.hd) || absUrl(urls.sd),
-      embed: isImage ? null : `https://www.redgifs.com/ifr/${g.id}`,
-      h: num(g.height),
-      w: num(g.width),
-      date: num(g.createDate),
-      tags,
-      by: g.userName ? [String(g.userName)] : []
-    });
-  }
-  return out;
-}
+export { parseRedGifs };

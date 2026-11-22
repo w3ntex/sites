@@ -8,6 +8,7 @@ import { parseEporner } from '../src/sources/eporner.js';
 import { parseRule34, parseSuggestions, resolveTags } from '../src/sources/rule34.js';
 import { parseRedGifs } from '../src/sources/redgifs.js';
 import { parseRedditListing, redditUrls, mergeRedditResults } from '../public/js/shared/reddit.js';
+import { parsePullPush, pullpushUrl, redgifsSearchUrl, epornerSearchUrl } from '../public/js/shared/apis.js';
 import { isQueryAllowed, isItemAllowed, isBlockedText } from '../public/js/shared/safety.js';
 import { wordDurationToSec, clockToSec, compactNumber, decodeEntities, toPercent } from '../src/lib.js';
 import worker from '../src/worker.js';
@@ -187,4 +188,55 @@ test('worker access key + unknown routes', async () => {
   assert.equal(nf.status, 404);
   const dl = await call('/api/dl?url=https://evil.example.com/x.mp4');
   assert.equal(dl.status, 400);
+});
+
+test('xvideos parser handles mobile attribute order', () => {
+  const items = parseXVideos(F.xvideosMobileHTML(3));
+  assert.equal(items.length, 3);
+  assert.equal(items[0].id, 'xvideos:70000');
+});
+
+test('pullpush parser + urls', () => {
+  const r = parsePullPush({ data: F.redditJSON(8).data.children.map(c => c.data) });
+  assert.equal(r.items.length, 6);
+  assert.match(r.cursor, /^pp:\d+$/);
+  assert.ok(pullpushUrl({ q: 'a b', cursor: 'pp:123' }).includes('before=123'));
+  assert.ok(redgifsSearchUrl({ q: 'x', media: 'image' }).includes('type=i'));
+  assert.ok(epornerSearchUrl({ q: 'x', hd: 'hd' }).includes('lq=0'));
+});
+
+test('reddit gif posts get an animated preview', () => {
+  const { items } = parseRedditListing(F.redditJSON(4));
+  assert.equal(items.find(i => i.type === 'video').preview, null);
+});
+
+test('worker explains unexpected pages (anti-bot / region)', async () => {
+  globalThis.fetch = F.mockFetch('', { failSources: ['xvideos-challenge', 'eporner-geo'] });
+  try {
+    const x = await call('/api/search?src=xvideos&q=diag1');
+    assert.equal(x.body.ok, false);
+    assert.match(x.body.error, /anti-robot/);
+    assert.match(x.body.debug, /Just a moment/);
+    const e = await call('/api/search?src=eporner&q=diag2');
+    assert.equal(e.body.ok, false);
+    assert.match(e.body.error, /région/);
+  } finally {
+    globalThis.fetch = F.mockFetch('');
+  }
+});
+
+test('worker reddit falls back to PullPush when Reddit refuses', async () => {
+  globalThis.fetch = F.mockFetch('', { failSources: ['reddit'] });
+  try {
+    const r = await call('/api/search?src=reddit&q=fallback1');
+    assert.equal(r.body.ok, true, JSON.stringify(r.body));
+    assert.ok(r.body.items.length > 0);
+    assert.match(r.body.cursor, /^pp:/);
+    globalThis.fetch = F.mockFetch('', { failSources: ['reddit', 'pullpush'] });
+    const r2 = await call('/api/search?src=reddit&q=fallback2');
+    assert.equal(r2.body.ok, false);
+    assert.match(r2.body.error, /PullPush/);
+  } finally {
+    globalThis.fetch = F.mockFetch('');
+  }
 });

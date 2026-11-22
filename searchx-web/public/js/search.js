@@ -70,7 +70,7 @@ function start(q, { fresh = false } = {}) {
 }
 
 function newPer() {
-  return { state: 'loading', items: [], page: 0, more: true, cursor: null, error: null, tags: null };
+  return { state: 'loading', items: [], page: 0, more: true, cursor: null, error: null, debug: '', phone: '', tags: null, via: null };
 }
 
 async function fetchOne(g, src, page, fresh = false) {
@@ -96,6 +96,7 @@ async function fetchOne(g, src, page, fresh = false) {
     per.more = Boolean(res.more) && fresh_.length > 0;
     per.cursor = res.cursor || null;
     per.tags = res.tags || per.tags;
+    per.via = res.via || per.via;
     per.state = 'done';
     per.error = null;
   } catch (e) {
@@ -104,7 +105,7 @@ async function fetchOne(g, src, page, fresh = false) {
     if (ctrl.signal.aborted && !timedOut) return; // cancelled by a newer search
     const msg = timedOut ? `${SOURCES[src].name} n'a pas répondu en 35 secondes.` : (e?.message || 'Erreur inconnue.');
     per.more = false;
-    if (page === 1) { per.state = 'error'; per.error = msg; }
+    if (page === 1) { per.state = 'error'; per.error = msg; per.debug = e?.debug || ''; per.phone = e?.phone || ''; }
     else per.state = 'done';
   } finally {
     clearTimeout(timer);
@@ -176,6 +177,24 @@ export function setFilters(patch) {
   }
   recompute();
   notify();
+}
+
+/** Turns off the given sources (e.g. the ones that failed the test). */
+export function disableSources(list) {
+  const off = new Set(list);
+  setFilters({ sources: state.filters.sources.filter(s => !off.has(s)) });
+  state.defaultFilters.sources = state.defaultFilters.sources.filter(s => !off.has(s));
+  save('defaultFilters', state.defaultFilters);
+}
+
+export function activeFilterCount(f = state.filters) {
+  const d = state.defaultFilters;
+  let n = 0;
+  if (f.dur !== 'any') n++;
+  if (f.hd !== 'any') n++;
+  if (f.sort !== d.sort) n++;
+  if (f.sources.length !== SOURCE_ORDER.length) n++;
+  return n;
 }
 
 export function resetFilters() {

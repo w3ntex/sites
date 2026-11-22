@@ -40,7 +40,7 @@ export const state = {
   toast: null,         // { msg, id }
   playlistId: null,    // open playlist in the Favorites tab
   libSegment: 'favorites',
-  locked: Boolean(settings.pinHash),
+  locked: Boolean(settings.pinHash || settings.bioId),
   hidden: false,
   update: false
 };
@@ -75,6 +75,26 @@ export function useAppState() {
 
 export function persist(...keys) {
   for (const k of keys) save(k, state[k]);
+}
+
+const scrollMemory = {};
+export function switchTab(id) {
+  scrollMemory[state.tab] = window.scrollY;
+  state.tab = id;
+  notify();
+  requestAnimationFrame(() => window.scrollTo(0, scrollMemory[id] || 0));
+}
+
+export function lockEnabled() {
+  return Boolean(state.settings.pinHash || state.settings.bioId);
+}
+
+export function lockNow() {
+  if (!lockEnabled()) return;
+  state.locked = true;
+  state.viewer = null;
+  state.sheet = null;
+  notify();
 }
 
 export function updateSettings(patch) {

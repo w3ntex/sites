@@ -148,6 +148,12 @@ export function deleteHistory(hid) {
   notify();
 }
 
+export function clearHistorySince(ts) {
+  state.history = state.history.filter(h => h.at < ts);
+  persist('history');
+  notify();
+}
+
 export function clearHistory() {
   state.history = [];
   persist('history');

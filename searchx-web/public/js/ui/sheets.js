@@ -1,9 +1,9 @@
 import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Sheet, Switch, SourceBadge, Thumb, cx } from './common.js';
-import { state, closeSheet, openSheet, toast, notify } from '../state.js';
-import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS } from '../config.js';
-import { setFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch } from '../search.js';
+import { state, closeSheet, openSheet, toast, notify, updateSettings } from '../state.js';
+import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS } from '../config.js';
+import { setFilters, resetFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch, disableSources } from '../search.js';
 import { toggleFavorite, isFavorite, addToPlaylist, createPlaylist } from '../library.js';
 import { downloadUrl } from '../api.js';
 import { haptic } from '../lib/haptics.js';
@@ -167,9 +167,14 @@ function SourceErrorSheet({ src }) {
   const per = state.search.per[src];
   return html`<${Sheet} title=${`${SOURCES[src]?.name} : erreur`} onClose=${closeSheet}>${close => html`
     <div class="error-box"><${Icon} name="warn" size=${20} /><p>${per?.error || 'Erreur inconnue.'}</p></div>
+    ${(per?.phone || per?.debug) && html`<div class="debug-box">
+      ${per?.phone && html`<p><b>Depuis le téléphone :</b> ${per.phone}</p>`}
+      ${per?.debug && html`<p><b>Détail serveur :</b> ${per.debug}</p>`}
+    </div>`}
     ${src === 'rule34' && /clé|API/i.test(per?.error || '') && html`<p class="sheet-text">Ajoute ta clé dans Réglages → Sources → Identifiants Rule34.</p>`}
     <div class="sheet-buttons col">
       <button type="button" class="btn" onClick=${() => { retrySource(src); close(); }}>Réessayer</button>
+      <button type="button" class="btn ghost" onClick=${() => { disableSources([src]); toast(`${SOURCES[src].name} désactivé`); close(); }}>Désactiver ${SOURCES[src]?.name}</button>
       ${src === 'rule34' && html`<button type="button" class="btn ghost" onClick=${() => { state.tab = 'settings'; close(); notify(); }}>Ouvrir les réglages</button>`}
     </div>`}<//>`;
 }
@@ -184,17 +189,37 @@ function FiltersSheet({ target = 'current' }) {
       notify();
     } else setFilters(patch);
   };
-  const Pick = ({ label, icon, options, k }) => html`<div class="pick">
+  const pick = (label, icon, options, k, disabled = false) => html`<div class=${cx('pick', disabled && 'disabled')}>
     <span class="pick-label"><${Icon} name=${icon} size=${15} />${label}</span>
-    <div class="pick-opts">${options.map(([v, l]) => html`<button type="button" key=${v} class=${cx('pill', f[k] === v && 'on')}
+    <div class="pick-opts">${options.map(([v, l]) => html`<button type="button" key=${v} class=${cx('pill', f[k] === v && 'on')} disabled=${disabled}
       onClick=${() => { haptic(); set({ [k]: v }); }}>${l}</button>`)}</div>
   </div>`;
-  return html`<${Sheet} title=${isDefault ? 'Filtres par défaut' : 'Filtres'} onClose=${closeSheet}>
-    <${Pick} label="Type" icon="layers" options=${MEDIA_OPTIONS} k="media" />
-    <${Pick} label="Durée" icon="timer" options=${DUR_OPTIONS} k="dur" />
-    <${Pick} label="Qualité" icon="sparkles" options=${HD_OPTIONS} k="hd" />
-    <${Pick} label="Tri" icon="sort" options=${SORT_OPTIONS} k="sort" />
-    ${isDefault && html`<p class="sheet-hint">Appliqués au démarrage et quand tu touches ↺ dans la barre de filtres.</p>`}
+  const toggleSource = src => {
+    const sources = f.sources.includes(src) ? f.sources.filter(x => x !== src) : [...f.sources, src];
+    set({ sources: SOURCE_ORDER.filter(x => sources.includes(x)) });
+  };
+  const durOK = f.media === 'all' || f.media === 'video';
+  return html`<${Sheet} title=${isDefault ? 'Filtres par défaut' : 'Filtres'} onClose=${closeSheet} tall
+    actions=${!isDefault ? html`<button type="button" class="text-btn" onClick=${() => { haptic(); resetFilters(); }}>Réinitialiser</button>` : null}>
+    ${pick('Type', 'layers', MEDIA_OPTIONS, 'media')}
+    ${pick('Durée', 'timer', DUR_OPTIONS, 'dur', !durOK)}
+    ${pick('Qualité', 'sparkles', HD_OPTIONS, 'hd')}
+    ${pick('Trier par', 'sort', SORT_OPTIONS, 'sort')}
+    <div class="pick">
+      <span class="pick-label"><${Icon} name="sliders" size=${15} />Sources (${f.sources.length}/${SOURCE_ORDER.length})</span>
+      <div class="pick-opts">${SOURCE_ORDER.map(src => html`<button type="button" key=${src}
+        class=${cx('pill src-pill', f.sources.includes(src) && 'on')} style=${`--c:${SOURCES[src].color}`}
+        onClick=${() => { haptic(); toggleSource(src); }}><i class="dotc"></i>${SOURCES[src].name}</button>`)}</div>
+    </div>
+    ${!isDefault && html`<div class="pick">
+      <span class="pick-label"><${Icon} name="list" size=${15} />Affichage</span>
+      <div class="pick-opts">${LAYOUTS.map(([v, l]) => html`<button type="button" key=${v} class=${cx('pill', state.settings.layout === v && 'on')}
+        onClick=${() => { haptic(); updateSettings({ layout: v }); }}>${l}</button>`)}
+        <button type="button" class=${cx('pill', state.settings.previews && 'on')} onClick=${() => { haptic(); updateSettings({ previews: !state.settings.previews }); }}>
+          Aperçus animés</button></div>
+    </div>`}
+    <p class="sheet-hint">${isDefault ? 'Appliqués au démarrage et quand tu réinitialises les filtres.'
+      : "Durée, qualité, tri et sources s'appliquent tout de suite aux résultats déjà chargés. Changer le type relance la recherche."}</p>
   <//>`;
 }
 

@@ -1,4 +1,4 @@
-import { upstream, decodeEntities, clockToSec, compactNumber, absUrl, num, UpstreamError } from '../lib.js';
+import { upstream, unexpectedPage, decodeEntities, clockToSec, compactNumber, absUrl, num, UpstreamError, DESKTOP_UA, MOBILE_UA } from '../lib.js';
 
 // Tries xHamster's front-end JSON API, then the JSON embedded in the search page (window.initials).
 export async function search({ q, page, sort }) {
@@ -19,16 +19,30 @@ export async function search({ q, page, sort }) {
   const s = { views: 'views', newest: 'newest', rating: 'rating' }[sort];
   if (s) p.set('sort', s);
   const qs = p.toString();
-  const html = await upstream(`https://xhamster.com/search/${encodeURIComponent(q)}${qs ? `?${qs}` : ''}`);
-  const json = initialsJSON(html);
-  if (!json) {
-    if (/thumb-list|video-thumb/.test(html)) return { items: [], more: false };
-    throw apiError || new UpstreamError('parse');
+  const url = `https://xhamster.com/search/${encodeURIComponent(q)}${qs ? `?${qs}` : ''}`;
+
+  // Desktop page, then the mobile page (different front-end, sometimes less filtered).
+  let lastError = apiError;
+  for (const ua of [DESKTOP_UA, MOBILE_UA]) {
+    let pg;
+    try {
+      pg = await upstream(url, { ua, as: 'page' });
+    } catch (e) {
+      lastError = e;
+      if (e instanceof UpstreamError && (e.kind === 'http' || e.kind === 'unexpected')) continue;
+      throw e;
+    }
+    const json = initialsJSON(pg.text);
+    if (json) {
+      try {
+        const items = extractXHamster(JSON.parse(json));
+        return { items, more: items.length >= 20 };
+      } catch { /* try the next variant */ }
+    }
+    if (/thumb-list|video-thumb/.test(pg.text) && !/thumb-image-container/.test(pg.text)) return { items: [], more: false };
+    lastError = unexpectedPage(pg);
   }
-  let data;
-  try { data = JSON.parse(json); } catch { throw new UpstreamError('parse'); }
-  const items = extractXHamster(data);
-  return { items, more: items.length >= 20 };
+  throw lastError || new UpstreamError('parse');
 }
 
 export function initialsJSON(html) {

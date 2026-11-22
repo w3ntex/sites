@@ -41,7 +41,7 @@ function OpenOnSite({ item, text = "Ce contenu se lit sur le site d'origine." })
   <//>`;
 }
 
-function NativeVideo({ item, active }) {
+function NativeVideo({ item, active, onTap }) {
   const ref = useRef(null);
   const isGif = item.type === 'gif';
   const [failed, setFailed] = useState(false);
@@ -61,7 +61,7 @@ function NativeVideo({ item, active }) {
     if (item.embed) return html`<${EmbedPlayer} item=${item} active=${active} autostart />`;
     return html`<${OpenOnSite} item=${item} text="Le fichier ne peut pas être lu ici." />`;
   }
-  return html`<div class="vmedia" onClick=${isGif ? (e => { e.stopPropagation(); const v = ref.current; if (v) (v.paused ? v.play() : v.pause()); }) : undefined}>
+  return html`<div class="vmedia" onClick=${isGif ? (e => { e.stopPropagation(); onTap?.(); }) : undefined}>
     <video ref=${ref} src=${item.media} poster=${item.thumb} playsInline=${true} loop=${isGif} muted=${muted}
       autoPlay=${active && isGif && state.settings.autoplayGifs} controls=${!isGif} preload=${active ? 'auto' : 'metadata'}
       onError=${() => setFailed(true)} onPlaying=${() => setWaiting(false)} onCanPlay=${() => setWaiting(false)}></video>
@@ -72,9 +72,10 @@ function NativeVideo({ item, active }) {
 }
 
 function EmbedPlayer({ item, active, autostart = false }) {
-  const [playing, setPlaying] = useState(autostart);
+  const auto = autostart || state.settings.autoplayVideos;
+  const [playing, setPlaying] = useState(auto && active);
   const [sandbox, setSandbox] = useState(state.settings.sandbox);
-  useEffect(() => { if (!active) setPlaying(false); else if (autostart) setPlaying(true); }, [active]);
+  useEffect(() => { if (!active) setPlaying(false); else if (auto) setPlaying(true); }, [active]);
   if (!playing) {
     return html`<${Poster} item=${item}>
       <button type="button" class="vplay" aria-label="Lire" onClick=${e => { e.stopPropagation(); haptic(); setPlaying(true); }}>
@@ -165,7 +166,7 @@ function ZoomImage({ item, active, onZoom, onTap }) {
 
 function Slide({ item, active, onZoom, onTap }) {
   if (item.type === 'image') return html`<${ZoomImage} item=${item} active=${active} onZoom=${onZoom} onTap=${onTap} />`;
-  if (item.media && PLAYABLE.test(item.media)) return html`<${NativeVideo} item=${item} active=${active} />`;
+  if (item.media && PLAYABLE.test(item.media)) return html`<${NativeVideo} item=${item} active=${active} onTap=${onTap} />`;
   if (item.embed) return html`<${EmbedPlayer} item=${item} active=${active} autostart=${item.type === 'gif'} />`;
   return html`<${OpenOnSite} item=${item} />`;
 }
@@ -178,6 +179,8 @@ export function Viewer() {
   const [chrome, setChrome] = useState(true);
   const track = useRef(null);
   const idxRef = useRef(V.index);
+  const [dragY, setDragY] = useState(0);
+  const drag = useRef(null);
 
   useLayoutEffect(() => {
     const el = track.current;
@@ -224,6 +227,37 @@ export function Viewer() {
     el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
   };
 
+  // Controls fade away after a moment on images / GIFs; a tap brings them back.
+  useEffect(() => {
+    const it = items[idx];
+    if (!chrome || !it || it.type === 'video') return;
+    const t = setTimeout(() => setChrome(false), 3500);
+    return () => clearTimeout(t);
+  }, [idx, chrome]);
+
+  // Swipe down to close (not while zoomed; embedded players keep their own touches).
+  const onTouchStart = e => {
+    if (zoomed || e.touches.length !== 1) { drag.current = null; return; }
+    drag.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, dir: null };
+  };
+  const onTouchMove = e => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.touches[0].clientX - d.x, dy = e.touches[0].clientY - d.y;
+    if (!d.dir) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      d.dir = Math.abs(dy) > Math.abs(dx) * 1.3 && dy > 0 ? 'down' : 'other';
+    }
+    if (d.dir === 'down') setDragY(Math.max(0, dy));
+  };
+  const onTouchEnd = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || d.dir !== 'down') return;
+    if (dragY > 110) { haptic(); closeViewer(); }
+    else setDragY(0);
+  };
+
   const item = items[idx] || items[0];
   const fav = isFavorite(item.id);
   const src = SOURCES[item.src];
@@ -243,8 +277,10 @@ export function Viewer() {
     } catch { /* cancelled */ }
   };
 
-  return html`<div class=${cx('viewer', !chrome && 'bare')} role="dialog" aria-label="Lecteur">
-    <div class=${cx('vtrack', zoomed && 'locked')} ref=${track} onScroll=${onScroll}>
+  return html`<div class=${cx('viewer', !chrome && 'bare', dragY > 0 && 'dragging')} role="dialog" aria-label="Lecteur"
+    style=${dragY ? `transform:translateY(${dragY}px);background:rgba(0,0,0,${Math.max(0.25, 1 - dragY / 500)})` : ''}
+    onTouchStart=${onTouchStart} onTouchMove=${onTouchMove} onTouchEnd=${onTouchEnd} onTouchCancel=${onTouchEnd}>
+    <div class=${cx('vtrack', (zoomed || dragY > 0) && 'locked')} ref=${track} onScroll=${onScroll}>
       ${items.map((it, i) => html`<div class="vslide" key=${it.id}>
         ${Math.abs(i - idx) <= 1 ? html`<${Slide} item=${it} active=${i === idx} onZoom=${setZoomed} onTap=${() => setChrome(c => !c)} />` : null}
       </div>`)}

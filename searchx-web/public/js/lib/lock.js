@@ -42,6 +42,15 @@ export async function biometricsAvailable() {
 
 /** Creates the local passkey; returns its id (base64url). Requires a user gesture. */
 export async function registerBiometrics() {
+  authBusy = true;
+  try {
+    return await createCredential();
+  } finally {
+    setTimeout(() => { authBusy = false; }, 800);
+  }
+}
+
+async function createCredential() {
   const cred = await navigator.credentials.create({
     publicKey: {
       rp: { name: 'SearchX', id: location.hostname },
@@ -57,8 +66,20 @@ export async function registerBiometrics() {
   return b64url(cred.rawId);
 }
 
-/** Prompts Face ID / Touch ID for the stored passkey. Requires a user gesture. */
+/** True while the Face ID sheet is on screen (it briefly blurs the page: don't treat that as leaving). */
+export let authBusy = false;
+
+/** Prompts Face ID / Touch ID for the stored passkey (iOS offers the device passcode as fallback). */
 export async function verifyBiometrics(id) {
+  authBusy = true;
+  try {
+    return await getAssertion(id);
+  } finally {
+    setTimeout(() => { authBusy = false; }, 800);
+  }
+}
+
+async function getAssertion(id) {
   const assertion = await navigator.credentials.get({
     publicKey: {
       challenge: randomBytes(32),

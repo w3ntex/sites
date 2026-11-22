@@ -1,12 +1,12 @@
 import { html, useState, useEffect, useRef, useCallback } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Spinner, cx, EmptyState } from './common.js';
-import { Grid, SkeletonGrid } from './grid.js';
-import { state, openSheet } from '../state.js';
-import { SOURCES, POPULAR, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, SOURCE_ORDER } from '../config.js';
+import { Grid, SkeletonGrid, Strip } from './grid.js';
+import { state, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
+import { SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, SOURCE_ORDER, LAYOUTS } from '../config.js';
 import {
-  runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters,
-  toggleVisibleSource, showAllSources, toggleCreator, clearCreators, clearRecent, isAnySourceLoading
+  runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
+  toggleVisibleSource, showAllSources, clearCreators, clearRecent, isAnySourceLoading
 } from '../search.js';
 import { suggestTags } from '../api.js';
 import { haptic } from '../lib/haptics.js';
@@ -14,10 +14,10 @@ import { compact } from '../lib/format.js';
 import { openViewer } from './viewer.js';
 
 const label = (opts, v) => (opts.find(o => o[0] === v) || [, ''])[1];
+const LAYOUT_ICON = { grid2: 'layers', grid3: 'grip', list: 'list' };
 
-function SearchField() {
+function SearchField({ focused, setFocused }) {
   const [text, setText] = useState(state.search.query);
-  const [focused, setFocused] = useState(false);
   const [tags, setTags] = useState([]);
   const input = useRef(null);
 
@@ -53,7 +53,7 @@ function SearchField() {
   return html`<div class="search-wrap">
     <form class=${cx('search-field', focused && 'focused')} onSubmit=${e => { e.preventDefault(); submit(); }} role="search">
       <${Icon} name="search" size=${18} />
-      <input ref=${input} type="search" value=${text} placeholder="Rechercher sur toutes les sources"
+      <input ref=${input} type="search" value=${text} placeholder="Rechercher partout"
         autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
         onInput=${e => setText(e.currentTarget.value)}
         onFocus=${() => setFocused(true)}
@@ -75,24 +75,18 @@ function SearchField() {
   </div>`;
 }
 
-function FilterBar() {
+function TypePills() {
   const f = state.filters;
-  const durOK = f.media === 'all' || f.media === 'video';
-  const chip = (icon, text, active, onClick, disabled = false) => html`<button type="button"
-    class=${cx('chip', active && 'active')} disabled=${disabled} onClick=${() => { haptic(); onClick(); }}>
-    <${Icon} name=${icon} size=${14} /><span>${text}</span><${Icon} name="chevronDown" size=${12} stroke=${2.6} />
-  </button>`;
-  const pick = (title, options, k) => () => openSheet('options', { title, options, value: f[k], key: k, onPick: v => setFilters({ [k]: v }) });
-  const isDefault = JSON.stringify({ ...f, sources: [...f.sources].sort() }) ===
-    JSON.stringify({ ...state.defaultFilters, sources: [...state.defaultFilters.sources].sort() });
-  return html`<div class="chips scroll-x">
-    ${chip('layers', label(MEDIA_OPTIONS, f.media), f.media !== 'all', pick('Type de média', MEDIA_OPTIONS, 'media'))}
-    ${chip('timer', durOK ? label(DUR_OPTIONS, f.dur) : 'Toutes durées', durOK && f.dur !== 'any', pick('Durée', DUR_OPTIONS, 'dur'), !durOK)}
-    ${chip('sparkles', label(HD_OPTIONS, f.hd), f.hd !== 'any', pick('Qualité', HD_OPTIONS, 'hd'))}
-    ${chip('sort', label(SORT_OPTIONS, f.sort), f.sort !== 'relevance', pick('Trier par', SORT_OPTIONS, 'sort'))}
-    ${chip('sliders', `Sources ${f.sources.length}/${SOURCE_ORDER.length}`, f.sources.length !== SOURCE_ORDER.length, () => openSheet('sources'))}
-    ${!isDefault && html`<button type="button" class="chip round" aria-label="Réinitialiser les filtres"
-      onClick=${() => { haptic(); resetFilters(); }}><${Icon} name="refresh" size=${15} /></button>`}
+  const S = state.search;
+  return html`<div class="type-row">
+    <div class="type-pills" role="tablist">
+      ${MEDIA_OPTIONS.map(([v, l]) => html`<button type="button" key=${v} role="tab" aria-selected=${f.media === v ? 'true' : 'false'}
+        class=${cx('type-pill', f.media === v && 'on')} onClick=${() => { if (f.media !== v) { haptic(); setFilters({ media: v }); } }}>${l}</button>`)}
+    </div>
+    ${S.creators.length ? html`<button type="button" class=${cx('chip small', S.selectedCreators.length && 'active')}
+      onClick=${() => { haptic(); openSheet('creators'); }}>
+      <${Icon} name="users" size=${13} /><span>${S.selectedCreators.length || S.creators.length}</span>
+    </button>` : null}
   </div>`;
 }
 
@@ -107,7 +101,7 @@ function SourceChips() {
       const p = S.per[src];
       const on = S.visibleSources.includes(src);
       const dim = S.visibleSources.length && !on;
-      return html`<button type="button" key=${src} class=${cx('chip small src', on && 'selected', dim && 'dim')}
+      return html`<button type="button" key=${src} class=${cx('chip small src', on && 'selected', dim && 'dim', p.state === 'error' && 'err')}
         style=${`--c:${SOURCES[src].color}`}
         onClick=${() => { haptic(); if (p.state === 'error') openSheet('sourceError', { src }); else toggleVisibleSource(src); }}>
         <i class="dotc"></i><span>${SOURCES[src].name}</span>
@@ -119,22 +113,25 @@ function SourceChips() {
   </div>`;
 }
 
-function CreatorChips() {
+function ResultsToolbar() {
   const S = state.search;
-  if (!S.creators.length) return null;
-  const selected = S.selectedCreators;
-  const byKey = new Map(S.creators.map(c => [c.key, c]));
-  return html`<div class="chips scroll-x creators">
-    <button type="button" class=${cx('chip small', selected.length && 'active')} onClick=${() => { haptic(); openSheet('creators'); }}>
-      <${Icon} name="users" size=${13} /><span>${selected.length ? `Créateurs · ${selected.length}` : `Créateurs (${S.creators.length})`}</span>
-      <${Icon} name="chevronDown" size=${11} stroke=${2.6} />
+  const f = state.filters;
+  const cycleLayout = () => {
+    const i = LAYOUTS.findIndex(l => l[0] === state.settings.layout);
+    haptic();
+    updateSettings({ layout: LAYOUTS[(i + 1) % LAYOUTS.length][0] });
+  };
+  const tags = activeSources().map(s => S.per[s]?.tags).find(Boolean);
+  const showTags = tags && tags.length && tags.join(' ') !== S.query.toLowerCase().replace(/\s+/g, '_');
+  return html`<div class="results-bar">
+    <span class="rb-count">${S.results.length ? `${S.results.length} résultat${S.results.length > 1 ? 's' : ''}` : ''}
+      ${showTags ? html`<small>Rule34 : ${tags.join(', ')}</small>` : null}</span>
+    <button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier par', key: 'sort', options: SORT_OPTIONS, value: f.sort, onPick: v => setFilters({ sort: v }) }); }}>
+      <${Icon} name="sort" size=${14} />${label(SORT_OPTIONS, f.sort)}
     </button>
-    ${selected.length
-      ? html`${selected.map(k => html`<button type="button" key=${k} class="chip small filled" onClick=${() => { haptic(); toggleCreator(k); }}>
-          <span>${byKey.get(k)?.name || k}</span><${Icon} name="x" size=${11} stroke=${3} /></button>`)}
-        <button type="button" class="chip small ghost" onClick=${() => { haptic(); clearCreators(); }}>Effacer</button>`
-      : S.creators.slice(0, 10).map(c => html`<button type="button" key=${c.key} class="chip small ghost"
-          onClick=${() => { haptic(); toggleCreator(c.key); }}><span>${c.name}</span><em>${c.count}</em></button>`)}
+    <button type="button" class="rb-btn icon" aria-label="Changer l'affichage" onClick=${cycleLayout}>
+      <${Icon} name=${LAYOUT_ICON[state.settings.layout] || 'layers'} size=${16} />
+    </button>
   </div>`;
 }
 
@@ -176,6 +173,31 @@ function usePullToRefresh(onRefresh, enabled) {
   return { pull, busy };
 }
 
+/** Hides the header while scrolling down through results, shows it again when scrolling up. */
+function useAutoHide(enabled) {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    if (!enabled) { setHidden(false); return; }
+    let last = window.scrollY;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (y < 140) setHidden(false);
+        else if (y > last + 8) setHidden(true);
+        else if (y < last - 8) setHidden(false);
+        last = y;
+        ticking = false;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [enabled]);
+  return hidden;
+}
+
 function InstallCard() {
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -191,14 +213,21 @@ function InstallCard() {
 }
 
 function Welcome() {
+  const seen = new Set();
+  const resume = state.history.map(h => h.item).filter(it => !seen.has(it.id) && seen.add(it.id)).slice(0, 14);
+  const favs = state.favorites.slice(0, 14);
   return html`<div class="welcome">
     <${InstallCard} />
     <div class="hero">
       <h1>Une recherche,<br /><span>toutes les sources.</span></h1>
-      <p>${SOURCE_ORDER.map(s => SOURCES[s].name).join(' · ')}</p>
+      <p>${SOURCE_ORDER.filter(s => state.filters.sources.includes(s)).map(s => SOURCES[s].name).join(' · ') || 'Aucune source activée'}</p>
     </div>
+    <${Strip} title="Reprendre" items=${resume} onOpen=${it => { haptic(); openViewer(resume, it.id); }}
+      action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); switchTab('history'); }}>Historique</button>`} />
+    <${Strip} title="Favoris" items=${favs} onOpen=${it => { haptic(); openViewer(favs, it.id); }}
+      action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); state.libSegment = 'favorites'; switchTab('library'); }}>Tout voir</button>`} />
     ${state.recent.length ? html`<section class="chip-section">
-      <header><h3>Récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
+      <header><h3>Recherches récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
       <div class="chips wrap">${state.recent.slice(0, 14).map(r => html`<button type="button" key=${r} class="chip pillish"
         onClick=${() => { haptic(); runSearch(r); }}>${r}</button>`)}</div>
     </section>` : null}
@@ -217,13 +246,12 @@ function Results() {
   const onEnd = useCallback(() => loadMore(), []);
   const loadingAny = isAnySourceLoading();
 
-  if (S.notice) {
-    return html`<${EmptyState} icon="shield" title="Recherche refusée" text=${S.notice} />`;
-  }
+  if (S.notice) return html`<${EmptyState} icon="shield" title="Recherche refusée" text=${S.notice} />`;
   if (!S.results.length && (S.loading || loadingAny)) return html`<${SkeletonGrid} count=${8} />`;
   if (!S.results.length) {
-    const errors = activeSources().filter(s => S.per[s]?.state === 'error');
-    const allFailed = errors.length && errors.length === activeSources().filter(s => S.per[s]).length;
+    const act = activeSources().filter(s => S.per[s]);
+    const errors = act.filter(s => S.per[s]?.state === 'error');
+    const allFailed = errors.length && errors.length === act.length;
     return html`<${EmptyState} icon=${allFailed ? 'warn' : 'search'}
       title=${allFailed ? 'Les sources ne répondent pas' : 'Aucun résultat'}
       text=${allFailed ? 'Touche une source marquée ⚠️ pour voir pourquoi.'
@@ -236,28 +264,49 @@ function Results() {
     ? html`<div class="list-end"><${Spinner} /></div>`
     : canLoadMore()
       ? html`<div class="list-end"><button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
-      : html`<div class="list-end muted">${S.results.length} résultat${S.results.length > 1 ? 's' : ''} · fin</div>`;
+      : html`<div class="list-end muted">Fin des résultats</div>`;
   return html`<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${footer} onEndReached=${onEnd} />`;
+}
+
+function ScrollTop() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const on = () => setShow(window.scrollY > 1400);
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
+  if (!show) return null;
+  return html`<button type="button" class="fab" aria-label="Remonter" onClick=${() => { haptic(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+    <${Icon} name="chevronDown" size=${22} class="up" />
+  </button>`;
 }
 
 export function SearchTab() {
   const S = state.search;
+  const [focused, setFocused] = useState(false);
   const { pull, busy } = usePullToRefresh(refresh, Boolean(S.query));
-  const tags = activeSources().map(s => S.per[s]?.tags).find(Boolean);
+  const hidden = useAutoHide(Boolean(S.query && S.results.length) && !focused);
+  const nFilters = activeFilterCount();
   return html`<div class="tab tab-search">
-    <header class="topbar">
-      <${SearchField} />
-      <${FilterBar} />
+    <header class=${cx('topbar', hidden && 'tucked')}>
+      <div class="search-row">
+        <${SearchField} focused=${focused} setFocused=${setFocused} />
+        ${!focused && html`<button type="button" class=${cx('icon-btn tool', nFilters && 'on')} aria-label="Filtres"
+          onClick=${() => { haptic(); openSheet('filters'); }}>
+          <${Icon} name="sliders" size=${19} />${nFilters ? html`<i class="badge-n">${nFilters}</i>` : null}
+        </button>`}
+        ${!focused && lockEnabled() && html`<button type="button" class="icon-btn tool" aria-label="Verrouiller maintenant"
+          onClick=${() => { haptic(); lockNow(); }}><${Icon} name="lock" size=${18} /></button>`}
+      </div>
+      <${TypePills} />
       ${S.query && html`<${SourceChips} />`}
-      ${S.query && html`<${CreatorChips} />`}
     </header>
     <div class="ptr" style=${`height:${pull}px`}>
       ${(pull > 0 || busy) && html`<span class=${cx('ptr-icon', (pull > 70 || busy) && 'ready', busy && 'spin')}><${Icon} name="refresh" size=${20} /></span>`}
     </div>
     <main class="content">
-      ${S.query ? html`
-        ${tags && tags.length && tags.join(' ') !== S.query.toLowerCase().replace(/\s+/g, '_') ? html`<p class="resolved">Rule34 : tag${tags.length > 1 ? 's' : ''} <b>${tags.join(', ')}</b></p>` : null}
-        <${Results} />` : html`<${Welcome} />`}
+      ${S.query ? html`<${ResultsToolbar} /><${Results} />` : html`<${Welcome} />`}
     </main>
+    ${S.query && html`<${ScrollTop} />`}
   </div>`;
 }

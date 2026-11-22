@@ -1,4 +1,4 @@
-import { html, useState } from '../../vendor/preact-htm.mjs';
+import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Sheet, cx } from './common.js';
 import { state, notify, updateSettings, closeSheet, toast } from '../state.js';
@@ -19,11 +19,51 @@ export function PinPad({ value, length = 4, error = false, onDigit, onDelete, ex
   </div>`;
 }
 
+function unlock() {
+  state.locked = false;
+  notify();
+}
+
 export function LockScreen() {
   const s = state.settings;
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
-  const unlock = () => { state.locked = false; notify(); };
+  const [busy, setBusy] = useState(false);
+  const [showPin, setShowPin] = useState(!s.bioId);
+  const tried = useRef(false);
+
+  const bio = async (auto = false) => {
+    if (!s.bioId || busy) return;
+    if (!auto) haptic();
+    setBusy(true);
+    try {
+      if (await verifyBiometrics(s.bioId)) { unlock(); return; }
+    } catch (e) {
+      // Without a tap, iOS may refuse to show Face ID: the screen stays tappable.
+      if (!auto && e?.name !== 'NotAllowedError') toast("Face ID n'a pas fonctionné.");
+      if (!auto && s.pinHash) setShowPin(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Ask for Face ID right away when the lock screen appears, and again each time the app comes back.
+  useEffect(() => {
+    const attempt = () => {
+      if (s.bioId && document.visibilityState === 'visible' && !tried.current) {
+        tried.current = true;
+        bio(true);
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') tried.current = false;
+      else setTimeout(attempt, 350);
+    };
+    attempt();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   const check = async p => {
     if (await hashPin(p, s.pinSalt) === s.pinHash) { haptic(); unlock(); return; }
     haptic();
@@ -37,10 +77,18 @@ export function LockScreen() {
     setPin(p);
     if (p.length === 4) check(p);
   };
-  const bio = async () => {
-    haptic();
-    try { if (await verifyBiometrics(s.bioId)) unlock(); } catch { toast('Face ID annulé : utilise ton code.'); }
-  };
+
+  if (s.bioId && !showPin) {
+    return html`<button type="button" class="lock-screen tap" onClick=${() => bio(false)} aria-label="Déverrouiller avec Face ID">
+      <div class="lock-top">
+        <div class="lock-icon big"><${Icon} name="faceid" size=${44} stroke=${1.7} /></div>
+        <h2>SearchX est verrouillé</h2>
+        <p class="muted">${busy ? 'Face ID…' : 'Touche l\'écran pour déverrouiller avec Face ID'}</p>
+      </div>
+      ${s.pinHash && html`<span class="text-btn lock-alt" onClick=${e => { e.stopPropagation(); haptic(); setShowPin(true); }}>Utiliser le code</span>`}
+    </button>`;
+  }
+
   return html`<div class="lock-screen">
     <div class="lock-top">
       <div class="lock-icon"><${Icon} name="lock" size=${26} /></div>
@@ -48,7 +96,7 @@ export function LockScreen() {
       <p class="muted">Entre ton code${s.bioId ? ' ou utilise Face ID' : ''}</p>
     </div>
     <${PinPad} value=${pin} error=${error} onDigit=${digit} onDelete=${() => { haptic(); setPin(pin.slice(0, -1)); }}
-      extraKey=${s.bioId ? html`<button type="button" class="pin-bio" aria-label="Face ID" onClick=${bio}><${Icon} name="faceid" size=${30} /></button>` : null} />
+      extraKey=${s.bioId ? html`<button type="button" class="pin-bio" aria-label="Face ID" onClick=${() => bio(false)}><${Icon} name="faceid" size=${30} /></button>` : null} />
   </div>`;
 }
 

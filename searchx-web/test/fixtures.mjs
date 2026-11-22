@@ -171,13 +171,21 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
     const failing = s => failSources.includes(s);
     await new Promise(r => setTimeout(r, 40 + Math.random() * 260));
 
-    if (host.endsWith('xvideos.com')) return failing('xvideos') ? text('busy', 429) : text(xvideosHTML(24, base, (parseInt(url.searchParams.get('p') || '0', 10) || 0) + 1));
+    if (host.endsWith('xvideos.com')) {
+      if (failing('xvideos')) return text('busy', 429);
+      if (failing('xvideos-challenge')) return text('<html><head><title>Just a moment...</title></head><body><div id="cf-chl">Checking</div></body></html>');
+      return text(xvideosHTML(24, base, (parseInt(url.searchParams.get('p') || '0', 10) || 0) + 1));
+    }
     if (host.endsWith('xhamster.com')) {
       if (url.pathname.startsWith('/api/front/search')) return text('<html>not json</html>');
       return failing('xhamster') ? text('no', 403) : text(xhamsterHTML(24, base, page));
     }
     if (host === 'api.redtube.com') return failing('redtube') ? text('x', 500) : json(redtubeJSON(20, base, page));
-    if (host.endsWith('eporner.com')) return failing('eporner') ? text('x', 503) : json(epornerJSON(40, base, page));
+    if (host.endsWith('eporner.com')) {
+      if (failing('eporner')) return text('x', 503);
+      if (failing('eporner-geo')) return text('<html><head><title>Eporner</title></head><body>This website is not available in your country.</body></html>');
+      return json(epornerJSON(40, base, page));
+    }
     if (host === 'ac.rule34.xxx' || (host === 'api.rule34.xxx' && url.pathname.includes('autocomplete'))) {
       return json(rule34Autocomplete(url.searchParams.get('q') || ''));
     }
@@ -190,10 +198,19 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
       if (url.pathname.includes('/auth/temporary')) return json({ token: 'tok', addr: '1.2.3.4', agent: 'x' });
       return failing('redgifs') ? json({ error: 'x' }, 401) : json(redgifsJSON(40, base, page));
     }
-    if (host.endsWith('reddit.com')) return failing('reddit') ? text('blocked', 403) : json(redditJSON(25, base, page < 3 ? `t3_p${page}` : null));
+    if (host.endsWith('reddit.com')) return failing('reddit') ? text('<html><title>Blocked</title>blocked</html>', 403) : json(redditJSON(25, base, page < 3 ? `t3_p${page}` : null));
+    if (host === 'api.pullpush.io') {
+      if (failing('pullpush')) return text('down', 502);
+      return json({ data: redditJSON(25, base).data.children.map(c => c.data) });
+    }
     if (host.endsWith('redgifs.com') || host.endsWith('redd.it') || host.endsWith('rule34.xxx')) {
       return new Response('MEDIA', { status: 200, headers: { 'content-type': 'video/mp4', 'content-length': '5' } });
     }
     return text('not found', 404);
   };
+}
+
+/** xVideos markup as served to phones: attribute order differs (class before id). */
+export function xvideosMobileHTML(n = 3) {
+  return xvideosHTML(n).replace(/<div id="video_(\d+)" data-id="(\d+)" class="([^"]+)">/g, '<div class="$3" data-id="$2" id="video_$1">');
 }

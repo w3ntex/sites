@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '2.0.0';
 
 export const SOURCES = {
   xvideos: { name: 'xVideos', badge: 'XV', color: '#e5484d', types: ['video'], note: 'Recherche du site.' },
@@ -18,7 +18,8 @@ export const MEDIA_OPTIONS = [['all', 'Tout'], ['video', 'Vidéos'], ['gif', 'GI
 export const DUR_OPTIONS = [['any', 'Toutes durées'], ['short', 'Moins de 10 min'], ['medium', '10 à 30 min'], ['long', 'Plus de 30 min']];
 export const HD_OPTIONS = [['any', 'Toute qualité'], ['hd', 'HD (720p+)'], ['uhd', '4K']];
 export const SORT_OPTIONS = [['relevance', 'Pertinence'], ['views', 'Plus vues'], ['newest', 'Plus récentes'], ['rating', 'Mieux notées']];
-export const LOCK_DELAYS = [[0, 'Immédiatement'], [60, 'Après 1 minute'], [300, 'Après 5 minutes'], [900, 'Après 15 minutes']];
+export const LOCK_DELAYS = [[0, "Dès que je quitte l'app"], [60, 'Après 1 minute'], [300, 'Après 5 minutes'], [900, 'Après 15 minutes']];
+export const LAYOUTS = [['grid2', 'Grille'], ['grid3', 'Compacte'], ['list', 'Liste']];
 
 export const POPULAR = [
   'amateur', 'anal', 'asian', 'big ass', 'big tits', 'blonde', 'blowjob', 'brunette', 'compilation', 'cosplay',
@@ -45,6 +46,9 @@ export const DEFAULT_SETTINGS = {
   pinSalt: null,
   bioId: null,          // WebAuthn credential id (Face ID / Touch ID)
   installIcon: 'app',
+  layout: 'grid2',
+  previews: true,       // animated previews of GIFs in the grid
+  autoplayVideos: false, // start embedded players as soon as the slide is shown
   r34key: '',
   r34user: '',
   accessKey: ''

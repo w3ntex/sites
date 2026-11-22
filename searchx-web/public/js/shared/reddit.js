@@ -61,11 +61,12 @@ export function parseRedditListing(json) {
     if (!permalink) continue;
 
     const img = p.preview?.images?.[0];
+    const link = cleanUrl(p.url_overridden_by_dest || p.url) || '';
     const thumb = cleanUrl(img?.source?.url) || cleanUrl(img?.resolutions?.at?.(-1)?.url) ||
-      (String(p.thumbnail || '').startsWith('http') ? cleanUrl(p.thumbnail) : null);
+      (String(p.thumbnail || '').startsWith('http') ? cleanUrl(p.thumbnail) : null) ||
+      (/\.(jpe?g|png|webp)(\?|$)/i.test(link) ? link : null);
     if (!thumb) continue;
 
-    const link = cleanUrl(p.url_overridden_by_dest || p.url) || '';
     const domain = String(p.domain || '').toLowerCase();
     const video = p.secure_media?.reddit_video || p.media?.reddit_video;
     const previewVideo = p.preview?.reddit_video_preview;
@@ -109,6 +110,7 @@ export function parseRedditListing(json) {
       url,
       type,
       media,
+      preview: type === 'gif' && media && /\.mp4(\?|$)/i.test(media) ? media : null,
       embed,
       h,
       date: p.created_utc || null,

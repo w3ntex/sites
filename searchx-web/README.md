@@ -7,6 +7,20 @@ SearchX as a web app you install from Safari to the iPhone home screen. You don'
 
 ## Features
 
+**v2:**
+* **Phone first.** RedGIFs, Eporner and Reddit (plus the PullPush Reddit archive) are called straight from the phone when the API allows it. The app remembers what works and otherwise goes through the server.
+* **Diagnostics.** Every error says what the site sent back: an anti-robot page, a region block, an age gate or an HTTP code. *Tester toutes les sources* shows whether each source answered through the phone or the server, and can disable the failing ones in one tap.
+* **Security.** Face ID is asked when the app opens and every time you come back, and it works without a SearchX code (iOS falls back to the iPhone passcode). The app locks as soon as you leave it. It shows a black screen while you're away, which keeps it out of the recent-apps view.
+* **Search screen.**
+  * A compact header that hides while scrolling down.
+  * One-tap pills for Tout / Vidéos / GIFs / Images.
+  * A single **Filtres** sheet with a badge counting the active filters.
+  * A results bar showing the count, sort and layout.
+* **Results.** Three layouts (grid, compact, list), animated GIF previews in the grid, a "Vu" badge on items already opened, and a scroll-to-top button.
+* **Home.** *Reprendre* (recent history) and *Favoris* strips.
+* **Viewer.** Swipe down to close. Controls fade out on GIFs and images. Embedded players can start automatically.
+* **Library.** A search box and sorting for favorites, a search box for history, and history clearing by last hour, today, or all.
+
 * Searches xVideos, xHamster, RedTube, Eporner, Rule34, RedGIFs and Reddit at once. Results appear as each source answers. Each source has a chip above the results: tap it to show only that source, or see its error ⚠️.
 * Filters for type, duration, quality and sort. Changing duration, quality or sort reorders the loaded results without reloading them. Changing the type runs a new search.
 * Relevance ranking: results that actually match the query move up.

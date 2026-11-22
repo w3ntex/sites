@@ -9,15 +9,47 @@ import { haptic } from '../lib/haptics.js';
 import { duration } from '../lib/format.js';
 import { SOURCES } from '../config.js';
 
+const FAV_SORTS = [['recent', 'Récents'], ['old', 'Anciens'], ['source', 'Par source'], ['title', 'A → Z']];
+
+function matchText(it, q) {
+  if (!q) return true;
+  const hay = `${it.title} ${(it.by || []).join(' ')} ${SOURCES[it.src]?.name || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
+  return q.split(/\s+/).every(w => hay.includes(w));
+}
+
+export function FilterField({ value, onInput, placeholder }) {
+  return html`<div class="filter-field">
+    <${Icon} name="search" size=${16} />
+    <input type="search" value=${value} placeholder=${placeholder} onInput=${e => onInput(e.currentTarget.value)}
+      autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    ${value && html`<button type="button" class="clear" aria-label="Effacer" onClick=${() => onInput('')}><${Icon} name="x" size=${12} stroke=${3} /></button>`}
+  </div>`;
+}
+
 function Favorites() {
-  const onOpen = useCallback(item => { haptic(); openViewer(state.favorites, item.id); }, []);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState('recent');
+  const query = q.trim().toLowerCase();
+  let list = state.favorites.filter(it => matchText(it, query));
+  if (sort === 'old') list = list.slice().reverse();
+  if (sort === 'source') list = list.slice().sort((a, b) => a.src.localeCompare(b.src));
+  if (sort === 'title') list = list.slice().sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+  const onOpen = item => { haptic(); openViewer(list, item.id); };
   const onLong = useCallback(item => openSheet('item', { item }), []);
   if (!state.favorites.length) {
     return html`<${EmptyState} icon="heart" title="Aucun favori"
       text="Appuie longuement sur un résultat (ou touche ♥ dans le lecteur) pour l'ajouter ici." />`;
   }
-  return html`<${Grid} items=${state.favorites} onOpen=${onOpen} onLongPress=${onLong}
-    footer=${html`<div class="list-end muted">${state.favorites.length} favori${state.favorites.length > 1 ? 's' : ''}</div>`} />`;
+  return html`<div>
+    <div class="list-tools">
+      <${FilterField} value=${q} onInput=${setQ} placeholder="Chercher dans les favoris" />
+      <button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier les favoris', key: 'favsort', options: FAV_SORTS, value: sort, onPick: setSort }); }}>
+        <${Icon} name="sort" size=${14} />${FAV_SORTS.find(s => s[0] === sort)[1]}</button>
+    </div>
+    ${list.length ? html`<${Grid} items=${list} onOpen=${onOpen} onLongPress=${onLong}
+      footer=${html`<div class="list-end muted">${list.length} favori${list.length > 1 ? 's' : ''}</div>`} />`
+      : html`<p class="muted center pad">Aucun favori ne correspond.</p>`}
+  </div>`;
 }
 
 function newPlaylist() {
