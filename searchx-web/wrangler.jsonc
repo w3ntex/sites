@@ -1,6 +1,6 @@
 {
   // Cloudflare Worker that serves the SearchX web app (./public) and its search API (src/worker.js).
-  // Deploy: Cloudflare dashboard → Workers & Pages → Create → Import a repository (root: searchx-web).
+  // Used when this folder is the build root. Cloudflare's default (repository root) uses ../wrangler.jsonc.
   "name": "searchx",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",

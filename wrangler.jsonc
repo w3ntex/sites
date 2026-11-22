@@ -1,0 +1,16 @@
+{
+  // Cloudflare Worker for the SearchX web app (searchx-web/). Kept at the repository root so that
+  // Cloudflare's "Import a repository" works with its default settings (no root directory needed).
+  "name": "searchx",
+  "main": "searchx-web/src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./searchx-web/public",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true }
+  // Optional variables (Worker → Settings → Variables and Secrets):
+  //   R34_API_KEY / R34_USER_ID  Rule34 credentials (otherwise entered in the app's settings)
+  //   ACCESS_KEY                 if set, the app must send this key (Réglages → Avancé → Serveur)
+  //   REDGIFS_TOKEN              your own RedGIFs token (otherwise a free temporary one is used)
+}

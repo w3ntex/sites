@@ -1,0 +1,13 @@
+{
+  "name": "searchx-deploy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deploys searchx-web/ (SearchX web app + API) as a Cloudflare Worker",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "test": "npm --prefix searchx-web test"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.2"
+  }
+}

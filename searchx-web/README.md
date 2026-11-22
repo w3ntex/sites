@@ -31,7 +31,7 @@ SearchX as a web app you install from Safari to the iPhone home screen. You don'
    * Project name: **`searchx`**. It must match `name` in `wrangler.jsonc`.
    * Build command: leave empty.
    * Deploy command: `npx wrangler deploy` (the default).
-   * Advanced settings → Root directory: **`searchx-web`**.
+   * No root directory is needed: the repository root has its own `wrangler.jsonc` pointing at `searchx-web/`. (If you set the root directory to `searchx-web`, its own `wrangler.jsonc` works too.)
 4. Open **Settings → Build → Branch control** and set the production branch to the branch that contains `searchx-web/`.
 5. Every push to that branch now redeploys. The app runs at `https://searchx.<your-subdomain>.workers.dev`.
 6. Open that URL in Safari, tap **Share**, then **Sur l'écran d'accueil**.
