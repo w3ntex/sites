@@ -40,7 +40,7 @@ export function pageInfo(res, text = '') {
 /** Guess why a site sent an unexpected page, from its text. */
 export function explainPage(text) {
   const t = String(text || '').slice(0, 20000).toLowerCase();
-  if (/^\s*(<[^>]+>\s*)*please visit https?:\/\/www\.xvideos\.com/.test(t) || (t.length < 400 && t.includes('please visit https://www.xvideos.com'))) {
+  if (t.includes('please visit') && t.includes('xvideos')) {
     return "xVideos refuse les recherches venant de serveurs (il renvoie une page vide). Utilise « Chercher sur xVideos ».";
   }
   if (/just a moment|cf-chl|challenge-platform|attention required|enable javascript and cookies/.test(t)) return 'Le site protège sa recherche par un contrôle anti-robot.';

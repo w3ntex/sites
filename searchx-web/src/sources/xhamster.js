@@ -21,9 +21,14 @@ export async function search({ q, page, sort }) {
   const qs = p.toString();
   const url = `https://xhamster.com/search/${encodeURIComponent(q)}${qs ? `?${qs}` : ''}`;
 
-  // Desktop page, then the mobile page (different front-end, sometimes less filtered).
+  // Desktop page, then the mobile page, then the desktop page again after a pause: the refusals
+  // (503) depend on which Cloudflare server the request leaves from, so a retry often passes.
   let lastError = apiError;
-  for (const ua of [DESKTOP_UA, MOBILE_UA]) {
+  for (const [i, ua] of [DESKTOP_UA, MOBILE_UA, DESKTOP_UA].entries()) {
+    if (i === 2) {
+      if (!(lastError instanceof UpstreamError && lastError.kind === 'http' && lastError.status === 503)) break;
+      await new Promise(r => setTimeout(r, 900));
+    }
     let pg;
     try {
       pg = await upstream(url, { ua, as: 'page' });

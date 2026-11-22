@@ -80,6 +80,7 @@ function onLeave() {
 function onReturn() {
   if (lockEnabled() && hiddenAt && (Date.now() - hiddenAt) / 1000 >= (state.settings.lockDelay || 0)) state.locked = true;
   hiddenAt = 0;
+  edgeCover = false;
   setCover(false);
   notify();
 }
@@ -97,7 +98,45 @@ function installPrivacyHandlers() {
       if (state.settings.blur) setCover(true);
     }, 0);
   });
-  window.addEventListener('focus', () => { if (document.visibilityState === 'visible') setCover(false); });
+  window.addEventListener('focus', () => { if (document.visibilityState === 'visible' && !edgeCover) setCover(false); });
+
+  // iOS takes the app-switcher snapshot *before* the page hears that it is leaving, so covering on
+  // visibilitychange is too late. Leaving always starts with a swipe from the home-indicator strip at
+  // the bottom edge: cover the screen the instant a touch starts there, so the black screen is
+  // already drawn when the snapshot is taken. A tap that stays in the app uncovers on release.
+  window.addEventListener('touchstart', e => {
+    if (!state.settings.blur || authBusy) return;
+    const t = e.touches[0];
+    if (!t || t.clientY < window.innerHeight - homeIndicatorZone()) return;
+    edgeCover = true;
+    setCover(true);
+  }, { capture: true, passive: true });
+  window.addEventListener('touchend', () => {
+    if (!edgeCover) return;
+    edgeCover = false;
+    if (document.visibilityState === 'visible') setCover(false);
+  }, { capture: true, passive: true });
+  window.addEventListener('touchcancel', () => {
+    // The system took the gesture (home / app switcher). If the user stays after all, uncover.
+    if (!edgeCover) return;
+    setTimeout(() => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) { edgeCover = false; setCover(false); }
+    }, 1200);
+  }, { capture: true, passive: true });
+}
+
+let edgeCover = false;
+let zoneCache = 0;
+
+/** Height of the home-indicator strip (bottom safe area), at least 20 px. */
+function homeIndicatorZone() {
+  if (zoneCache) return zoneCache;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom);visibility:hidden;pointer-events:none';
+  document.body.appendChild(probe);
+  zoneCache = Math.max(20, probe.offsetHeight || 0);
+  probe.remove();
+  return zoneCache;
 }
 
 let installed = false;

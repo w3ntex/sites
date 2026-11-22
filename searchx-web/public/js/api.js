@@ -25,6 +25,7 @@ export function phoneReason(e) {
   if (e.status) return `HTTP ${e.status}${e.status === 429 ? ' (trop de requêtes)' : e.status === 403 ? ' (refusé)' : ''}`;
   if (e.name === 'TypeError') return "le site n'autorise pas les appels depuis une app web";
   if (e.name === 'TimeoutError' || e.name === 'AbortError') return 'pas de réponse à temps';
+  if (e.name === 'JsonpError') return `${e.message} (le site refuse aussi la méthode alternative)`;
   return e.message || String(e);
 }
 
@@ -92,6 +93,45 @@ async function directJSON(url, signal, extra = {}) {
   return res.json();
 }
 
+/**
+ * JSONP (not subject to CORS), run inside a sandboxed iframe with an opaque origin: the remote
+ * script can only hand back its data through postMessage, never touch the app or its storage.
+ */
+function jsonpSandboxed(url, signal, timeout = 12000) {
+  return new Promise((resolve, reject) => {
+    const id = `sx${Math.random().toString(36).slice(2)}`;
+    const src = `${url}${url.includes('?') ? '&' : '?'}jsonp=sxcb`;
+    const attr = src.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed;width:1px;height:1px;left:-10px;top:-10px;border:0;opacity:0;pointer-events:none';
+    iframe.srcdoc = `<!doctype html><script>var done=false;function sxcb(d){done=true;parent.postMessage({id:"${id}",data:d},"*")}<\/script>` +
+      `<script src="${attr}" onload="if(!done)parent.postMessage({id:'${id}',error:'nocb'},'*')" onerror="parent.postMessage({id:'${id}',error:'load'},'*')"><\/script>`;
+    let timer = null;
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+      signal?.removeEventListener?.('abort', onAbort);
+      iframe.remove();
+    };
+    const onMsg = e => {
+      if (e.source !== iframe.contentWindow || e.data?.id !== id) return;
+      cleanup();
+      if (e.data.error) {
+        const err = new Error(e.data.error === 'nocb' ? 'JSONP non pris en charge' : 'JSONP refusé');
+        err.name = 'JsonpError';
+        reject(err);
+      } else resolve(e.data.data);
+    };
+    const onAbort = () => { cleanup(); reject(new DOMException('Aborted', 'AbortError')); };
+    timer = setTimeout(() => { cleanup(); const err = new Error('pas de réponse à temps'); err.name = 'TimeoutError'; reject(err); }, timeout);
+    window.addEventListener('message', onMsg);
+    signal?.addEventListener?.('abort', onAbort);
+    document.body.appendChild(iframe);
+  });
+}
+
 // ---- direct (phone) implementations ------------------------------------------------------------
 
 async function redgifsToken(signal, force = false) {
@@ -146,7 +186,16 @@ async function redditDirect(p, signal) {
   if (canDirect('reddit')) {
     try {
       const urls = redditUrls({ q: p.q, sort: p.sort, cursor: p.cursor, page: p.page });
-      const one = async url => (url ? parseRedditListing(await directJSON(url, signal)) : { items: [], after: null });
+      const one = async url => {
+        if (!url) return { items: [], after: null };
+        try {
+          return parseRedditListing(await directJSON(url, signal));
+        } catch (e) {
+          if (e.name !== 'TypeError' || signal?.aborted) throw e;
+          // CORS refused: try JSONP, which browsers don't restrict.
+          return parseRedditListing(await jsonpSandboxed(url, signal));
+        }
+      };
       const [a, b] = await Promise.allSettled([one(urls.priority), one(urls.global)]);
       if (a.status === 'rejected' && b.status === 'rejected') throw a.reason;
       const m = mergeRedditResults(a.status === 'fulfilled' ? a.value : null, b.status === 'fulfilled' ? b.value : null);
