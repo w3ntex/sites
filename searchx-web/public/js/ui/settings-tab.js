@@ -3,12 +3,13 @@ import { Icon } from './icons.js';
 import { Group, Row, Switch, Sheet, SourceBadge, Spinner, cx } from './common.js';
 import { PinSetupSheet } from './lock.js';
 import { state, notify, updateSettings, openSheet, closeSheet, toast, lockEnabled, lockNow } from '../state.js';
-import { SOURCES, SOURCE_ORDER, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS } from '../config.js';
-import { setFilters, clearRecent, disableSources } from '../search.js';
+import { SOURCES, SOURCE_ORDER, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, THEMES } from '../config.js';
+import { setFilters, clearRecent, disableSources, rerunSearch } from '../search.js';
 import { clearHistory, exportData, importData } from '../library.js';
 import { searchSource, health, resetDirect } from '../api.js';
 import { biometricsAvailable, registerBiometrics } from '../lib/lock.js';
 import { applyInstallIcon, isStandalone } from '../lib/install.js';
+import { applyTheme } from '../lib/theme.js';
 import { haptic } from '../lib/haptics.js';
 
 function parseR34(text) {
@@ -191,12 +192,21 @@ export function SettingsTab() {
   const r34ok = s.r34key && s.r34user;
 
   return html`<div class="tab">
-    <header class="topbar plain"><h1 class="page-title">Réglages</h1></header>
+    <header class="topbar plain"><h1 class="page-title" data-jp="設定">Réglages</h1></header>
     <main class="content settings">
       ${!isStandalone() && html`<div class="install-card compact">
         <div class="install-icon"><img src=${INSTALL_ICONS[s.installIcon]?.icon || 'icons/app-180.png'} alt="" /></div>
         <div><strong>Installer l'app</strong><p>Safari → <span class="kbd"><${Icon} name="share" size=${13} /></span> → « Sur l'écran d'accueil ». Les réglages de l'app installée sont séparés de ceux de Safari.</p></div>
       </div>`}
+
+      <${Group} title="Apparence" footer="Le filtre anti-mineurs reste actif dans tous les modes, et il est plus strict pour le contenu dessiné (hentai, Rule34, 3D).">
+        <${Row} icon="sparkles" iconColor="#ff3d8b" title="Thème" chevron
+          right=${(THEMES.find(t => t[0] === s.theme) || THEMES[0])[1]}
+          onClick=${() => openSheet('options', { title: 'Thème', key: 'theme', options: THEMES, value: s.theme, onPick: v => { updateSettings({ theme: v }); applyTheme(v); } })} />
+        <${Row} icon="heart" iconColor="#c03af0" title="Mode hentai"
+          subtitle="Oriente toutes les sources vers le hentai : « hentai » ajouté aux recherches vidéo, subreddits hentai sur Reddit, Rule34 en premier."
+          right=${html`<${Switch} checked=${s.hentai} onChange=${v => { updateSettings({ hentai: v }); rerunSearch(); toast(v ? 'Mode hentai activé' : 'Mode hentai désactivé'); }} label="Mode hentai" />`} />
+      <//>
 
       <${Group} title="Sécurité" footer=${bioOK
           ? "Face ID est demandé à l'ouverture et à chaque retour dans l'app. Si Face ID échoue, iOS propose le code de ton iPhone."
@@ -225,7 +235,7 @@ export function SettingsTab() {
       <${Group} title="Icône et nom sur l'écran d'accueil" footer="Choisis avant d'ajouter SearchX à l'écran d'accueil. Pour changer une icône déjà installée : supprime-la puis ré-ajoute depuis Safari (exporte d'abord tes favoris).">
         <div class="icon-picker">
           ${Object.entries(INSTALL_ICONS).map(([k, v]) => html`<button type="button" key=${k} class=${cx('icon-choice', s.installIcon === k && 'on')} onClick=${() => setIcon(k)}>
-            <img src=${v.icon} alt="" /><span>${v.name}</span>
+            <img src=${v.icon} alt="" /><span>${v.label || v.name}</span>
           </button>`)}
         </div>
       <//>

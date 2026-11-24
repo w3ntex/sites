@@ -1,6 +1,6 @@
 // SearchX service worker: network-first for the app shell (always fresh after a deploy),
 // cache fallback when offline. The search API and media are never cached here.
-const CACHE = 'searchx-shell-v3';
+const CACHE = 'searchx-shell-v4';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

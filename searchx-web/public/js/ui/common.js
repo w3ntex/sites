@@ -166,9 +166,10 @@ export function SwipeRow({ onDelete, children, label = 'Supprimer' }) {
   </div>`;
 }
 
-export function EmptyState({ icon, title, text, children }) {
+export function EmptyState({ icon, title, text, kaomoji = null, children }) {
   return html`<div class="empty">
     <div class="empty-icon"><${Icon} name=${icon} size=${30} stroke=${1.7} /></div>
+    ${kaomoji && html`<div class="kaomoji" aria-hidden="true">${kaomoji}</div>`}
     <h3>${title}</h3>
     ${text && html`<p>${text}</p>`}
     ${children}

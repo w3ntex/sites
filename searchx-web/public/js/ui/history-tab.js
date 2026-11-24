@@ -40,7 +40,7 @@ export function HistoryTab() {
   return html`<div class="tab">
     <header class="topbar plain">
       <div class="title-row">
-        <h1 class="page-title">Historique</h1>
+        <h1 class="page-title" data-jp="履歴">Historique</h1>
         ${state.history.length ? html`<button type="button" class="text-btn danger" onClick=${() => { haptic(); confirmClear(); }}>Effacer</button>` : null}
       </div>
       ${state.history.length ? html`<${FilterField} value=${q} onInput=${setQ} placeholder="Chercher dans l'historique" />` : null}

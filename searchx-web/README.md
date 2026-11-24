@@ -2,10 +2,23 @@
 
 SearchX as a web app you install from Safari to the iPhone home screen. You don't need a computer, it never expires (unlike sideloading), and it's free.
 
-* **App**: `public/`, built with Preact + htm and no build step. French UI, OLED black, red accent.
+* **App**: `public/`, built with Preact + htm and no build step. French UI. Two themes: *Hentai néon* (default) and *Sobre* (OLED black, red accent).
 * **API**: `src/worker.js`, a Cloudflare Worker that searches the sites server-side. Browsers can't call those sites directly because of CORS. The Worker also serves the app.
 
 ## Features
+
+**v2.4 (hentai):**
+* **Hentai néon theme** (Réglages → Apparence → Thème):
+  * Night-plum background with pink → violet neon gradients.
+  * Manga screentones, speed lines on the lock and age screens, and drifting sakura petals (off with *Reduce Motion*).
+  * Japanese subtitles, an 18禁 stamp, and Mochiy Pop One for titles (`public/fonts/`, SIL OFL).
+  * A new heart icon. The old icon is still offered as *Sobre*.
+* **Mode hentai** (on by default):
+  * xVideos, xHamster, RedTube, Eporner and RedGIFs get `hentai` added to the query.
+  * Reddit searches r/hentai, r/HENTAI_GIF, r/rule34, r/ecchi and r/futanari.
+  * Rule34 comes first in the mixed results.
+  * The home screen offers bilingual categories (無修正, 触手, エルフ…).
+* **Stricter child-safety rules for drawn content.** These apply to Rule34 always, to everything in hentai mode, and to anything that looks drawn. They block school-age terms and any booru tag built on loli/shota, and add extra Rule34 exclusions. They can't be turned off.
 
 **v2:**
 * **Phone first.** RedGIFs, Eporner and Reddit (plus the PullPush Reddit archive) are called straight from the phone when the API allows it. The app remembers what works and otherwise goes through the server.

@@ -3,7 +3,7 @@ import { Icon } from './icons.js';
 import { Spinner, cx, EmptyState } from './common.js';
 import { Grid, SkeletonGrid, Strip } from './grid.js';
 import { state, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
-import { SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, SOURCE_ORDER, LAYOUTS, siteSearchUrl } from '../config.js';
+import { SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, SOURCE_ORDER, LAYOUTS, HENTAI_CATEGORIES, siteSearchUrl } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
   toggleVisibleSource, showAllSources, clearCreators, clearRecent, isAnySourceLoading
@@ -12,6 +12,7 @@ import { suggestTags } from '../api.js';
 import { haptic } from '../lib/haptics.js';
 import { compact } from '../lib/format.js';
 import { openViewer } from './viewer.js';
+import { Petals, isNeon } from './theme.js';
 
 const label = (opts, v) => (opts.find(o => o[0] === v) || [, ''])[1];
 const LAYOUT_ICON = { grid2: 'layers', grid3: 'grip', list: 'list' };
@@ -47,13 +48,14 @@ function SearchField({ focused, setFocused }) {
 
   const q = text.trim().toLowerCase();
   const recent = state.recent.filter(r => !q || r.toLowerCase().includes(q)).slice(0, q ? 4 : 8);
-  const popular = q ? POPULAR.filter(p => p.startsWith(q) && !recent.some(r => r.toLowerCase() === p)).slice(0, 4) : [];
+  const pool = state.settings.hentai ? [...new Set([...HENTAI_CATEGORIES.map(c => c.q), ...POPULAR])] : POPULAR;
+  const popular = q ? pool.filter(p => p.startsWith(q) && !recent.some(r => r.toLowerCase() === p)).slice(0, 4) : [];
   const showPanel = focused && (recent.length || popular.length || tags.length);
 
   return html`<div class="search-wrap">
     <form class=${cx('search-field', focused && 'focused')} onSubmit=${e => { e.preventDefault(); submit(); }} role="search">
       <${Icon} name="search" size=${18} />
-      <input ref=${input} type="search" value=${text} placeholder="Rechercher partout"
+      <input ref=${input} type="search" value=${text} placeholder=${state.settings.hentai ? 'Rechercher du hentai' : 'Rechercher partout'}
         autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
         onInput=${e => setText(e.currentTarget.value)}
         onFocus=${() => setFocused(true)}
@@ -126,7 +128,7 @@ function ResultsToolbar() {
   const failed = activeSources().filter(s => S.per[s]?.state === 'error');
   return html`${failed.length ? html`<div class="external-row">
     <span>Pas dispo ici, ouvre la recherche sur :</span>
-    ${failed.map(src => html`<a key=${src} class="chip small ghost" href=${siteSearchUrl(src, S.query)} target="_blank" rel="noopener noreferrer"
+    ${failed.map(src => html`<a key=${src} class="chip small ghost" href=${siteSearchUrl(src, S.query, { hentai: state.settings.hentai })} target="_blank" rel="noopener noreferrer"
       onClick=${() => haptic()}><span>${SOURCES[src].name}</span><${Icon} name="external" size=${11} /></a>`)}
   </div>` : null}
   <div class="results-bar">
@@ -218,30 +220,42 @@ function InstallCard() {
   </div>`;
 }
 
+function Categories() {
+  return html`<section class="chip-section">
+    <header><h3 data-jp="ジャンル">Catégories</h3></header>
+    <div class="cat-grid">${HENTAI_CATEGORIES.map(c => html`<button type="button" key=${c.q} class="cat"
+      onClick=${() => { haptic(); runSearch(c.q); }}><b lang="ja">${c.jp}</b><span>${c.fr}</span></button>`)}</div>
+  </section>`;
+}
+
 function Welcome() {
   const seen = new Set();
   const resume = state.history.map(h => h.item).filter(it => !seen.has(it.id) && seen.add(it.id)).slice(0, 14);
   const favs = state.favorites.slice(0, 14);
+  const hentai = state.settings.hentai;
+  const neon = isNeon();
   return html`<div class="welcome">
     <${InstallCard} />
     <div class="hero">
-      <h1>Une recherche,<br /><span>toutes les sources.</span></h1>
+      ${neon && html`<${Petals} count=${7} />`}
+      ${neon && html`<div class="hero-kicker" lang="ja">変態サーチ<span>18禁</span></div>`}
+      <h1>${hentai ? html`Tout le hentai,<br /><span>en une recherche.</span>` : html`Une recherche,<br /><span>toutes les sources.</span>`}</h1>
       <p>${SOURCE_ORDER.filter(s => state.filters.sources.includes(s)).map(s => SOURCES[s].name).join(' · ') || 'Aucune source activée'}</p>
     </div>
-    <${Strip} title="Reprendre" items=${resume} onOpen=${it => { haptic(); openViewer(resume, it.id); }}
+    <${Strip} title="Reprendre" jp="続きを見る" items=${resume} onOpen=${it => { haptic(); openViewer(resume, it.id); }}
       action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); switchTab('history'); }}>Historique</button>`} />
-    <${Strip} title="Favoris" items=${favs} onOpen=${it => { haptic(); openViewer(favs, it.id); }}
+    <${Strip} title="Favoris" jp="お気に入り" items=${favs} onOpen=${it => { haptic(); openViewer(favs, it.id); }}
       action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); state.libSegment = 'favorites'; switchTab('library'); }}>Tout voir</button>`} />
     ${state.recent.length ? html`<section class="chip-section">
-      <header><h3>Recherches récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
+      <header><h3 data-jp="最近の検索">Recherches récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
       <div class="chips wrap">${state.recent.slice(0, 14).map(r => html`<button type="button" key=${r} class="chip pillish"
         onClick=${() => { haptic(); runSearch(r); }}>${r}</button>`)}</div>
     </section>` : null}
-    <section class="chip-section">
-      <header><h3>Populaires</h3></header>
+    ${hentai ? html`<${Categories} />` : html`<section class="chip-section">
+      <header><h3 data-jp="人気">Populaires</h3></header>
       <div class="chips wrap">${POPULAR.map(p => html`<button type="button" key=${p} class="chip pillish"
         onClick=${() => { haptic(); runSearch(p); }}>${p}</button>`)}</div>
-    </section>
+    </section>`}
   </div>`;
 }
 
@@ -259,7 +273,7 @@ function Results() {
     const errors = act.filter(s => S.per[s]?.state === 'error');
     const allFailed = errors.length && errors.length === act.length;
     return html`<${EmptyState} icon=${allFailed ? 'warn' : 'search'}
-      title=${allFailed ? 'Les sources ne répondent pas' : 'Aucun résultat'}
+      title=${allFailed ? 'Les sources ne répondent pas' : 'Aucun résultat'} kaomoji=${allFailed ? '(╥﹏╥)' : '(´・ω・`)'}
       text=${allFailed ? 'Touche une source marquée ⚠️ pour voir pourquoi.'
         : (S.selectedCreators.length || S.visibleSources.length) ? 'Rien pour cette sélection. Élargis les filtres.'
         : `Rien trouvé pour « ${S.query} ». Essaie un autre mot ou d'autres filtres.`}>
@@ -311,7 +325,7 @@ export function SearchTab() {
       ${(pull > 0 || busy) && html`<span class=${cx('ptr-icon', (pull > 70 || busy) && 'ready', busy && 'spin')}><${Icon} name="refresh" size=${20} /></span>`}
     </div>
     <main class="content">
-      ${S.query ? html`<${ResultsToolbar} /><${Results} />` : html`<${Welcome} />`}
+      ${S.query ? html`${!S.notice && html`<${ResultsToolbar} />`}<${Results} />` : html`<${Welcome} />`}
     </main>
     ${S.query && html`<${ScrollTop} />`}
   </div>`;

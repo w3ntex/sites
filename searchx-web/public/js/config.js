@@ -1,22 +1,60 @@
-export const APP_VERSION = '2.3.0';
+import { HENTAI_SUBREDDITS } from './shared/reddit.js';
 
+export const APP_VERSION = '2.4.0';
+
+// Rule34 first: in the mixed results its posts come first (round-robin follows this order).
 export const SOURCES = {
-  xvideos: { name: 'xVideos', badge: 'XV', color: '#e5484d', types: ['video'], note: 'Recherche du site.' },
-  xhamster: { name: 'xHamster', badge: 'XH', color: '#f76b15', types: ['video'], note: 'API du site, sinon page de recherche.' },
-  redtube: { name: 'RedTube', badge: 'RT', color: '#d6293d', types: ['video'], note: 'API officielle.' },
-  eporner: { name: 'Eporner', badge: 'EP', color: '#3e8ef7', types: ['video'], note: 'API officielle, catalogue HD.' },
   rule34: { name: 'Rule34', badge: 'R34', color: '#46a758', types: ['video', 'gif', 'image'], note: 'Clé API gratuite requise (voir plus bas).' },
+  reddit: { name: 'Reddit', badge: 'RD', color: '#ff5f1f', types: ['video', 'gif', 'image'], note: 'Interrogé directement depuis ton téléphone.' },
   redgifs: { name: 'RedGIFs', badge: 'RG', color: '#e93d82', types: ['gif', 'image'], note: 'Jeton gratuit automatique.' },
-  reddit: { name: 'Reddit', badge: 'RD', color: '#ff5f1f', types: ['video', 'gif', 'image'], note: 'Interrogé directement depuis ton téléphone.' }
+  eporner: { name: 'Eporner', badge: 'EP', color: '#3e8ef7', types: ['video'], note: 'API officielle, catalogue HD.' },
+  xhamster: { name: 'xHamster', badge: 'XH', color: '#f76b15', types: ['video'], note: 'API du site, sinon page de recherche.' },
+  xvideos: { name: 'xVideos', badge: 'XV', color: '#e5484d', types: ['video'], note: 'Recherche du site.' },
+  redtube: { name: 'RedTube', badge: 'RT', color: '#d6293d', types: ['video'], note: 'API officielle.' }
 };
 
 export const SOURCE_ORDER = Object.keys(SOURCES);
 
+// ---- hentai mode ---------------------------------------------------------------------------------
+// Video sites and RedGIFs get "hentai" added to the query, Reddit searches the hentai subreddits,
+// Rule34 is drawn content already.
+const HENTAI_PREFIXED = new Set(['xvideos', 'xhamster', 'redtube', 'eporner', 'redgifs']);
+const ALREADY_DRAWN = /\b(?:hentai|anime|animated|animation|cartoon|3d|3dcg|sfm|mmd|rule ?34|r34|ecchi|doujin|doujinshi|manga|futa|futanari)\b/i;
+
+/** The query actually sent to a source. */
+export function sourceQuery(src, q, hentai) {
+  const t = String(q || '').trim();
+  if (!hentai || !HENTAI_PREFIXED.has(src) || ALREADY_DRAWN.test(t)) return t;
+  return `hentai ${t}`;
+}
+
+/** Home-screen categories (adult themes only). `q` is what gets searched. */
+export const HENTAI_CATEGORIES = [
+  { q: 'uncensored', fr: 'Non censuré', jp: '無修正' },
+  { q: 'animated', fr: 'Animé', jp: 'アニメ' },
+  { q: '3d', fr: '3D', jp: '3DCG' },
+  { q: 'milf', fr: 'Milf', jp: '人妻' },
+  { q: 'big breasts', fr: 'Gros seins', jp: '巨乳' },
+  { q: 'elf', fr: 'Elfe', jp: 'エルフ' },
+  { q: 'succubus', fr: 'Succube', jp: 'サキュバス' },
+  { q: 'monster girl', fr: 'Monster girl', jp: 'モン娘' },
+  { q: 'tentacle', fr: 'Tentacules', jp: '触手' },
+  { q: 'futanari', fr: 'Futanari', jp: 'ふたなり' },
+  { q: 'yuri', fr: 'Yuri', jp: '百合' },
+  { q: 'ahegao', fr: 'Ahegao', jp: 'アヘ顔' },
+  { q: 'netorare', fr: 'NTR', jp: '寝取られ' },
+  { q: 'maid', fr: 'Soubrette', jp: 'メイド' },
+  { q: 'bondage', fr: 'Bondage', jp: '緊縛' }
+];
+
+export const THEMES = [['hentai', 'Hentai néon'], ['classic', 'Sobre (noir et rouge)']];
+
 /** The site's own search page for a query (fallback when a source can't be searched from here). */
-export function siteSearchUrl(src, q) {
-  const e = encodeURIComponent(q.trim());
-  const dashed = encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, '-'));
-  const tags = encodeURIComponent(q.trim().toLowerCase().replace(/\s+/g, '_'));
+export function siteSearchUrl(src, query, { hentai = false } = {}) {
+  const q = sourceQuery(src, query, hentai);
+  const e = encodeURIComponent(q);
+  const dashed = encodeURIComponent(q.toLowerCase().replace(/\s+/g, '-'));
+  const tags = encodeURIComponent(q.toLowerCase().replace(/\s+/g, '_'));
   switch (src) {
     case 'xvideos': return `https://www.xvideos.com/?k=${e}`;
     case 'xhamster': return `https://xhamster.com/search/${e}`;
@@ -24,7 +62,9 @@ export function siteSearchUrl(src, q) {
     case 'eporner': return `https://www.eporner.com/search/${dashed}/`;
     case 'rule34': return `https://rule34.xxx/index.php?page=post&s=list&tags=${tags}`;
     case 'redgifs': return `https://www.redgifs.com/search?query=${e}`;
-    case 'reddit': return `https://www.reddit.com/search/?q=${e}&include_over_18=1`;
+    case 'reddit': return hentai
+      ? `https://www.reddit.com/r/${HENTAI_SUBREDDITS.join('+')}/search/?q=${e}&restrict_sr=1&include_over_18=1`
+      : `https://www.reddit.com/search/?q=${e}&include_over_18=1`;
     default: return null;
   }
 }
@@ -45,7 +85,8 @@ export const POPULAR = [
 ];
 
 export const INSTALL_ICONS = {
-  app: { name: 'SearchX', manifest: 'manifest.webmanifest', icon: 'icons/app-180.png' },
+  app: { name: 'SearchX', label: 'SearchX', manifest: 'manifest.webmanifest', icon: 'icons/app-180.png' },
+  classic: { name: 'SearchX', label: 'Sobre', manifest: 'manifest-classic.webmanifest', icon: 'icons/classic-180.png' },
   calc: { name: 'Calculatrice', manifest: 'manifest-calc.webmanifest', icon: 'icons/calc-180.png' },
   notes: { name: 'Notes', manifest: 'manifest-notes.webmanifest', icon: 'icons/notes-180.png' },
   clock: { name: 'Horloge', manifest: 'manifest-clock.webmanifest', icon: 'icons/clock-180.png' }
@@ -68,5 +109,7 @@ export const DEFAULT_SETTINGS = {
   autoplayVideos: false, // start embedded players as soon as the slide is shown
   r34key: '',
   r34user: '',
-  accessKey: ''
+  accessKey: '',
+  theme: 'hentai',      // 'hentai' (neon) | 'classic'
+  hentai: true          // hentai mode: every source is steered towards hentai
 };

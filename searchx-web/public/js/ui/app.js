@@ -11,6 +11,7 @@ import { LockScreen } from './lock.js';
 import { state, notify, useAppState, updateSettings, lockEnabled, switchTab } from '../state.js';
 import { haptic } from '../lib/haptics.js';
 import { authBusy } from '../lib/lock.js';
+import { Petals, isNeon } from './theme.js';
 
 const TABS = [
   ['search', 'Recherche', 'search'],
@@ -20,9 +21,13 @@ const TABS = [
 ];
 
 function AgeGate() {
+  const neon = isNeon();
   return html`<div class="age-gate">
+    ${neon && html`<${Petals} count=${9} />`}
     <div class="age-inner">
-      <div class="age-badge">18+</div>
+      ${neon
+        ? html`<div class="age-stamp" lang="ja"><b>18</b><span>禁</span></div><p class="age-kicker" lang="ja">成人向け</p>`
+        : html`<div class="age-badge">18+</div>`}
       <h1>Réservé aux adultes</h1>
       <p>SearchX recherche sur des sites qui hébergent du contenu sexuellement explicite. Tu dois avoir au moins 18 ans
         (ou l'âge de la majorité dans ton pays) pour continuer.</p>

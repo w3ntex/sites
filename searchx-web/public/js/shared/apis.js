@@ -101,8 +101,9 @@ export function epornerMore(data, page, items) {
 
 // ---- PullPush (public Reddit archive, used when Reddit itself refuses) ----------------------------
 
-export function pullpushUrl({ q, cursor = '' }) {
+export function pullpushUrl({ q, cursor = '', scope = '' }) {
   const p = new URLSearchParams({ q, over_18: 'true', size: '100', sort: 'desc', sort_type: 'created_utc' });
+  if (scope === 'hentai') p.set('subreddit', 'hentai');
   const before = (/^pp:(\d+)$/.exec(cursor || '') || [])[1];
   if (before) p.set('before', before);
   return `https://api.pullpush.io/reddit/search/submission/?${p}`;

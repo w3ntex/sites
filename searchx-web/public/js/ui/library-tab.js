@@ -143,7 +143,7 @@ export function LibraryTab() {
   const seg = state.libSegment;
   return html`<div class="tab">
     <header class="topbar plain">
-      <h1 class="page-title">${seg === 'favorites' ? 'Favoris' : 'Playlists'}</h1>
+      <h1 class="page-title" data-jp=${seg === 'favorites' ? 'お気に入り' : 'プレイリスト'}>${seg === 'favorites' ? 'Favoris' : 'Playlists'}</h1>
       <${Segmented} value=${seg} onChange=${v => { state.libSegment = v; notify(); }}
         options=${[['favorites', `Favoris${state.favorites.length ? ` (${state.favorites.length})` : ''}`], ['playlists', `Playlists${state.playlists.length ? ` (${state.playlists.length})` : ''}`]]} />
     </header>

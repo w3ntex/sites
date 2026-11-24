@@ -4,6 +4,7 @@ import { Sheet, cx } from './common.js';
 import { state, notify, updateSettings, closeSheet, toast, resetEverything } from '../state.js';
 import { hashPin, newSalt, verifyBiometrics, describeAuthError } from '../lib/lock.js';
 import { haptic } from '../lib/haptics.js';
+import { Petals, isNeon } from './theme.js';
 
 export function PinPad({ value, length = 4, error = false, onDigit, onDelete, extraKey = null }) {
   return html`<div class="pinpad-wrap">
@@ -83,9 +84,11 @@ export function LockScreen() {
 
   if (s.bioId && !showPin) {
     return html`<div class="lock-screen">
+      ${isNeon() && html`<${Petals} count=${6} />`}
       <button type="button" class="lock-tap" onClick=${bio} aria-label="Déverrouiller avec Face ID">
         <div class="lock-top">
           <div class=${cx('lock-icon big', prompting && 'pulse')}><${Icon} name="faceid" size=${44} stroke=${1.7} /></div>
+          ${isNeon() && html`<p class="lock-kicker" lang="ja">ロック中</p>`}
           <h2>SearchX est verrouillé</h2>
           <p class="muted">${prompting ? 'Regarde ton iPhone…' : 'Touche ici pour déverrouiller avec Face ID'}</p>
           ${msg && html`<p class="lock-msg">${msg}</p>`}
@@ -100,8 +103,10 @@ export function LockScreen() {
   }
 
   return html`<div class="lock-screen">
+    ${isNeon() && html`<${Petals} count=${6} />`}
     <div class="lock-top">
       <div class="lock-icon"><${Icon} name="lock" size=${26} /></div>
+      ${isNeon() && html`<p class="lock-kicker" lang="ja">ロック中</p>`}
       <h2>SearchX est verrouillé</h2>
       <p class="muted">Entre ton code${s.bioId ? ' ou utilise Face ID' : ''}</p>
       ${msg && html`<p class="lock-msg">${msg}</p>`}

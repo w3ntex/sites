@@ -1,5 +1,5 @@
 import { upstream, num, UpstreamError } from '../lib.js';
-import { BOORU_NEGATIVE_TAGS, isBlockedText } from '../../public/js/shared/safety.js';
+import { BOORU_NEGATIVE_TAGS, isBlockedTag } from '../../public/js/shared/safety.js';
 
 // Rule34.xxx — searched like the website: typed words are first turned into real tags with the
 // site's own autocomplete ("missionary" → "missionary_position"), then the DAPI is queried.
@@ -57,7 +57,7 @@ export function parseSuggestions(data) {
       const count = parseInt((/\((\d+)\)\s*$/.exec(String(item?.label || '')) || [])[1] || '0', 10);
       return { tag, count };
     })
-    .filter(t => t.tag && !BOORU_NEGATIVE_TAGS.includes(t.tag) && !isBlockedText(t.tag))
+    .filter(t => t.tag && !isBlockedTag(t.tag))
     .sort((a, b) => b.count - a.count);
 }
 

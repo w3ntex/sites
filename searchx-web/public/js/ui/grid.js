@@ -114,10 +114,10 @@ export function SkeletonGrid({ count = 8 }) {
 }
 
 /** Horizontal strip of small cards (home screen). */
-export function Strip({ title, items, onOpen, action = null }) {
+export function Strip({ title, jp = null, items, onOpen, action = null }) {
   if (!items.length) return null;
   return html`<section class="strip">
-    <header><h3>${title}</h3>${action}</header>
+    <header><h3 data-jp=${jp}>${title}</h3>${action}</header>
     <div class="strip-row">
       ${items.map(it => html`<button type="button" class="strip-card" key=${it.id} onClick=${() => onOpen(it)}>
         <span class="strip-thumb"><${Thumb} src=${it.thumb} fallback=${it.thumb2} />

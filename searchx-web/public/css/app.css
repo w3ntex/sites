@@ -1,4 +1,4 @@
-/* SearchX — OLED black, deep red accent, iOS-like. */
+/* SearchX — iOS-like. Two themes: "hentai" (neon, default, see the end of this file) and "classic" (OLED black + red). */
 :root {
   --bg: #000;
   --surface: #111113;
@@ -19,6 +19,10 @@
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --tabbar-h: 54px;
+  --grad: linear-gradient(var(--accent), var(--accent));
+  --glow: 0 2px 10px rgba(230, 57, 70, .35);
+  --bar-bg: rgba(0, 0, 0, .84);
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
   color-scheme: dark;
 }
 
@@ -56,7 +60,7 @@ img { display: block; }
 .topbar {
   position: sticky; top: 0; z-index: 20;
   padding: calc(var(--sat) + 8px) calc(12px + var(--sar)) 4px calc(12px + var(--sal));
-  background: rgba(0, 0, 0, .82);
+  background: var(--bar-bg);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
   border-bottom: .5px solid var(--line);
@@ -220,7 +224,7 @@ img { display: block; }
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex;
   height: calc(var(--tabbar-h) + var(--sab)); padding: 0 var(--sar) var(--sab) var(--sal);
-  background: rgba(0, 0, 0, .86); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  background: var(--bar-bg); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   border-top: .5px solid var(--line);
 }
 .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); font-size: 10.5px; font-weight: 600; }
@@ -476,7 +480,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; font-family: ui
 
 /* ---------- lock & age gate ---------- */
 .lock-screen, .age-gate {
-  position: fixed; inset: 0; z-index: 100; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: calc(var(--sat) + 20px) 24px calc(var(--sab) + 20px);
 }
 .lock-top { text-align: center; margin-bottom: 24px; }
@@ -520,7 +524,7 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 
 /* Status-bar strip stays black while the header slides away. */
 .tab-search::before {
-  content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--sat); background: #000; z-index: 21;
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--sat); background: var(--bg); z-index: 21;
 }
 .topbar { transition: transform .26s cubic-bezier(.2, .8, .3, 1); }
 .topbar.tucked { transform: translateY(-100%); }
@@ -665,3 +669,219 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 .reset-confirm { display: flex; flex-direction: column; gap: 8px; }
 .reset-confirm p { margin: 0; font-size: 13.5px; color: var(--text-2); text-align: center; }
 .lock-screen { justify-content: space-between; }
+
+/* =====================================================================================
+   v2.4 — shared pieces used by the hentai mode (categories, kaomoji, petals)
+   ===================================================================================== */
+@font-face {
+  font-family: "SX Display";
+  src: url("../fonts/display.woff2") format("woff2");
+  font-display: swap;
+}
+
+.cat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.cat {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  height: 68px; padding: 0 4px; border-radius: 14px; overflow: hidden; text-align: center;
+  background: var(--surface-2); border: 1px solid var(--line); transition: transform .12s;
+}
+.cat:active { transform: scale(.96); }
+.cat b { font-family: var(--font-display); font-weight: 400; font-synthesis: none; font-size: 19px; line-height: 1.1; color: var(--accent-2); white-space: nowrap; }
+.cat span { font-size: 11.5px; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.kaomoji { display: none; }
+.petals { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.petal {
+  position: absolute; top: -30px; left: var(--x); width: 15px; height: 12px; opacity: 0;
+  border-radius: 13px 1px 13px 1px;
+  background: linear-gradient(135deg, #ffe3f0 0%, #ff9ccb 55%, #ff5fa2 100%);
+  animation: petal-fall var(--d) linear var(--delay) infinite;
+}
+@keyframes petal-fall {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg) scale(var(--s)); }
+  8% { opacity: .8; }
+  30% { transform: translate3d(var(--sway), 32vh, 0) rotate(110deg) scale(var(--s)); }
+  55% { transform: translate3d(calc(var(--sway) * -.6), 58vh, 0) rotate(200deg) scale(var(--s)); }
+  80% { opacity: .65; transform: translate3d(var(--sway), 84vh, 0) rotate(290deg) scale(var(--s)); }
+  100% { opacity: 0; transform: translate3d(0, 108vh, 0) rotate(360deg) scale(var(--s)); }
+}
+@media (prefers-reduced-motion: reduce) { .petals { display: none; } }
+
+/* =====================================================================================
+   Theme "hentai" (default): night plum, neon pink → violet, manga screentones,
+   speed lines, sakura petals, Japanese subtitles. Classic = the :root values above.
+   ===================================================================================== */
+:root[data-theme="hentai"] {
+  --bg: #07040b;
+  --surface: #120a18;
+  --surface-2: #1c1024;
+  --surface-3: #2a1834;
+  --line: rgba(255, 150, 215, .1);
+  --text: #fcf2fb;
+  --text-2: rgba(246, 226, 244, .68);
+  --text-3: rgba(232, 204, 232, .42);
+  --accent: #ff3d8b;
+  --accent-2: #ff78b4;
+  --accent-soft: rgba(255, 61, 139, .16);
+  --bad: #ff5d82;
+  --grad: linear-gradient(135deg, #ff4f9a 0%, #e040d8 52%, #8b5cf6 100%);
+  --glow: 0 6px 22px rgba(255, 61, 139, .34);
+  --bar-bg: rgba(12, 6, 18, .8);
+  --font-display: "SX Display", "Hiragino Maru Gothic ProN", "Hiragino Sans", system-ui, sans-serif;
+}
+[data-theme="hentai"] body { background: transparent; }
+[data-theme="hentai"] ::selection { background: rgba(255, 61, 139, .38); }
+
+/* soft neon aura behind everything */
+[data-theme="hentai"] .app::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(110% 55% at 100% 0%, rgba(255, 61, 139, .15), transparent 62%),
+    radial-gradient(90% 50% at 0% 100%, rgba(139, 92, 246, .13), transparent 62%);
+}
+
+/* display font for titles */
+[data-theme="hentai"] .page-title,
+[data-theme="hentai"] .hero h1,
+[data-theme="hentai"] .chip-section h3,
+[data-theme="hentai"] .strip h3,
+[data-theme="hentai"] .sheet-head h2,
+[data-theme="hentai"] .age-inner h1,
+[data-theme="hentai"] .lock-top h2,
+[data-theme="hentai"] .lock-help h3,
+[data-theme="hentai"] .empty h3,
+[data-theme="hentai"] .day-title {
+  font-family: var(--font-display); font-weight: 400; font-synthesis: none; letter-spacing: 0;
+}
+[data-theme="hentai"] .page-title { font-size: 27px; margin: 8px 4px 12px; }
+[data-theme="hentai"] .chip-section h3, [data-theme="hentai"] .strip h3 { font-size: 16px; }
+[data-theme="hentai"] .sheet-head h2 { font-size: 18px; }
+
+/* Japanese subtitles (data-jp) */
+[data-theme="hentai"] [data-jp]::after {
+  content: attr(data-jp); display: inline-block; margin-left: 9px; transform: translateY(-.15em);
+  font-family: var(--font-display); font-weight: 400; font-size: 11.5px; letter-spacing: .12em;
+  color: var(--accent-2); opacity: .9; text-shadow: 0 0 10px rgba(255, 61, 139, .45);
+}
+[data-theme="hentai"] .page-title[data-jp]::after { font-size: 14px; margin-left: 11px; transform: translateY(-.25em); }
+
+/* bars */
+[data-theme="hentai"] .topbar { border-bottom-color: rgba(255, 61, 139, .16); }
+[data-theme="hentai"] .tabbar { border-top-color: rgba(255, 61, 139, .16); }
+[data-theme="hentai"] .tab-btn.on .icon { filter: drop-shadow(0 0 6px rgba(255, 61, 139, .75)); }
+[data-theme="hentai"] .search-field.focused { box-shadow: 0 0 0 2px rgba(255, 61, 139, .4), 0 0 18px rgba(255, 61, 139, .18); }
+
+/* hero */
+[data-theme="hentai"] .hero { position: relative; padding: 22px 2px 6px; }
+[data-theme="hentai"] .hero::before {
+  content: ""; position: absolute; right: -12px; top: -6px; width: 64%; height: 112%; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 79, 154, .55) 1.15px, transparent 1.7px) 0 0 / 9px 9px;
+  -webkit-mask: radial-gradient(closest-side at 72% 42%, #000, transparent);
+  mask: radial-gradient(closest-side at 72% 42%, #000, transparent);
+  opacity: .6;
+}
+.hero-kicker {
+  display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
+  font-family: var(--font-display); font-size: 13px; letter-spacing: .2em; color: var(--accent-2);
+  text-shadow: 0 0 14px rgba(255, 61, 139, .6);
+}
+.hero-kicker span {
+  padding: 2px 7px 3px; border-radius: 6px; font-size: 11px; letter-spacing: .04em; color: #fff;
+  background: var(--grad); text-shadow: none; box-shadow: 0 0 12px rgba(255, 61, 139, .45);
+}
+[data-theme="hentai"] .hero h1 { font-size: 27px; line-height: 1.24; }
+[data-theme="hentai"] .hero h1 span {
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255, 61, 139, .35));
+}
+[data-theme="hentai"] .hero p { margin-top: 12px; }
+
+/* categories: manga stickers */
+[data-theme="hentai"] .cat {
+  border: 1px solid transparent;
+  background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    linear-gradient(135deg, rgba(255, 79, 154, .6), rgba(139, 92, 246, .35)) border-box;
+}
+[data-theme="hentai"] .cat::after {
+  content: ""; position: absolute; right: -4px; bottom: -4px; width: 48px; height: 48px; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 120, 180, .5) 1px, transparent 1.6px) 0 0 / 6px 6px;
+  -webkit-mask: radial-gradient(circle at 100% 100%, #000, transparent 72%);
+  mask: radial-gradient(circle at 100% 100%, #000, transparent 72%);
+}
+[data-theme="hentai"] .cat b { text-shadow: 0 0 12px rgba(255, 61, 139, .45); }
+[data-theme="hentai"] .cat:active { box-shadow: 0 0 20px rgba(255, 61, 139, .35); }
+
+/* chips, pills, buttons */
+[data-theme="hentai"] .chip.pillish { background: var(--surface-2); border-color: var(--line); }
+[data-theme="hentai"] .chip.active, [data-theme="hentai"] .pill.on { box-shadow: 0 0 14px rgba(255, 61, 139, .22); }
+[data-theme="hentai"] .type-pill.on { background: var(--grad); box-shadow: 0 2px 14px rgba(255, 61, 139, .42); }
+[data-theme="hentai"] .btn:not(.ghost):not(.danger) { background: var(--grad); box-shadow: var(--glow); }
+[data-theme="hentai"] .update-pill, [data-theme="hentai"] .badge-n, [data-theme="hentai"] .badge-q,
+[data-theme="hentai"] .chip.filled, [data-theme="hentai"] .vplay { background: var(--grad); }
+[data-theme="hentai"] .vplay { box-shadow: 0 10px 34px rgba(255, 61, 139, .55); }
+[data-theme="hentai"] .switch.on { background: var(--accent); box-shadow: 0 0 12px rgba(255, 61, 139, .45); }
+[data-theme="hentai"] .check.on { background: var(--accent); border-color: var(--accent); }
+[data-theme="hentai"] .icon-btn.tool.on { box-shadow: 0 0 14px rgba(255, 61, 139, .25); }
+
+/* cards */
+[data-theme="hentai"] .card-thumb { border-radius: 14px; box-shadow: 0 0 0 1px rgba(255, 150, 215, .09); }
+[data-theme="hentai"] .card:active .card-thumb { box-shadow: 0 0 0 2px var(--accent), 0 0 22px rgba(255, 61, 139, .4); }
+[data-theme="hentai"] .badge-dur { background: rgba(16, 6, 22, .8); }
+[data-theme="hentai"] .strip-thumb { border-radius: 12px; box-shadow: 0 0 0 1px rgba(255, 150, 215, .09); }
+[data-theme="hentai"] .shimmer::after { background: linear-gradient(100deg, transparent 20%, rgba(255, 120, 180, .08) 50%, transparent 80%); }
+[data-theme="hentai"] .spinner { border-color: rgba(255, 120, 180, .2); border-top-color: var(--accent); }
+
+/* sheets, toasts, cards */
+[data-theme="hentai"] .sheet { box-shadow: 0 -1px 0 rgba(255, 61, 139, .3), 0 -12px 40px rgba(0, 0, 0, .55); }
+[data-theme="hentai"] .sheet-grab span { background: rgba(255, 120, 180, .45); }
+[data-theme="hentai"] .sheet-wrap.shown { background: rgba(8, 2, 12, .62); }
+[data-theme="hentai"] .toast {
+  background: rgba(34, 14, 42, .96); border-color: rgba(255, 61, 139, .55);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 22px rgba(255, 61, 139, .25);
+}
+[data-theme="hentai"] .install-card {
+  background: linear-gradient(135deg, rgba(255, 61, 139, .22), rgba(139, 92, 246, .12));
+  border-color: rgba(255, 61, 139, .4);
+}
+[data-theme="hentai"] .group-title { color: rgba(255, 150, 200, .6); }
+[data-theme="hentai"] .group-body { box-shadow: inset 0 0 0 1px rgba(255, 150, 215, .06); }
+[data-theme="hentai"] .list-card { box-shadow: inset 0 0 0 1px rgba(255, 150, 215, .06); }
+
+/* empty states with a kaomoji */
+[data-theme="hentai"] .empty-icon { background: var(--accent-soft); color: var(--accent-2); box-shadow: inset 0 0 0 1px rgba(255, 61, 139, .32); }
+[data-theme="hentai"] .kaomoji { display: block; margin: -4px 0 10px; font-size: 20px; color: var(--accent-2); text-shadow: 0 0 12px rgba(255, 61, 139, .5); }
+
+/* lock screen & age gate: manga speed lines around a neon glow */
+[data-theme="hentai"] .lock-screen, [data-theme="hentai"] .age-gate {
+  background: radial-gradient(120% 80% at 50% 40%, #25082b 0%, #0c0412 55%, #07040b 100%);
+}
+[data-theme="hentai"] .lock-screen::before, [data-theme="hentai"] .age-gate::before {
+  content: ""; position: absolute; inset: -30%; z-index: -1; pointer-events: none;
+  background:
+    repeating-conic-gradient(from 3deg at 50% 50%, rgba(255, 79, 154, .14) 0deg .9deg, transparent .9deg 5deg),
+    repeating-conic-gradient(from 0deg at 50% 50%, rgba(163, 92, 255, .1) 0deg .5deg, transparent .5deg 7.3deg);
+  -webkit-mask: radial-gradient(closest-side at 50% 50%, transparent 32%, #000 88%);
+  mask: radial-gradient(closest-side at 50% 50%, transparent 32%, #000 88%);
+}
+[data-theme="hentai"] .lock-icon {
+  background: var(--accent-soft); color: var(--accent-2);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 61, 139, .5), 0 0 36px rgba(255, 61, 139, .38);
+}
+.lock-top .lock-kicker {
+  margin: 0 0 8px; font-family: var(--font-display); font-size: 12px; letter-spacing: .32em; color: var(--accent-2);
+  text-shadow: 0 0 12px rgba(255, 61, 139, .6);
+}
+[data-theme="hentai"] .pinpad button { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 150, 215, .16); }
+[data-theme="hentai"] .pinpad .pin-del, [data-theme="hentai"] .pinpad .pin-bio { box-shadow: none; background: transparent; }
+[data-theme="hentai"] .pin-dots span.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px rgba(255, 61, 139, .7); }
+[data-theme="hentai"] .lock-help { background: var(--surface-2); box-shadow: 0 0 0 1px rgba(255, 61, 139, .25), 0 -10px 40px rgba(0, 0, 0, .6); }
+
+.age-stamp {
+  width: 136px; height: 136px; margin: 0 auto 8px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; gap: 1px;
+  font-family: var(--font-display); color: #fff; transform: rotate(-10deg);
+  background: radial-gradient(circle, rgba(255, 61, 139, .2), rgba(255, 61, 139, 0) 70%);
+  box-shadow: inset 0 0 0 7px var(--accent), inset 0 0 0 11px rgba(255, 61, 139, .25), 0 0 44px rgba(255, 61, 139, .5);
+}
+.age-stamp b { font-weight: 400; font-size: 46px; line-height: 1; letter-spacing: -.02em; }
+.age-stamp span { font-size: 34px; line-height: 1; color: var(--accent-2); }
+.age-inner .age-kicker { margin: 0; font-family: var(--font-display); font-size: 13px; letter-spacing: .45em; color: var(--accent-2); }

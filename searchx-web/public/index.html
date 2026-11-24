@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="hentai">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#07040b">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -16,13 +16,19 @@
   <link rel="manifest" href="manifest.webmanifest" id="link-manifest">
   <link rel="apple-touch-icon" href="icons/app-180.png" id="link-touch-icon">
   <link rel="icon" type="image/png" href="icons/app-192.png">
+  <link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
   <script>
-    // Apply the discreet home-screen name/icon before Safari reads the page.
+    // Apply the theme and the home-screen name/icon before the page is drawn / read by Safari.
     (function () {
       try {
-        var k = (JSON.parse(localStorage.getItem('sx.settings') || '{}') || {}).installIcon;
-        var m = { calc: ['Calculatrice', 'calc'], notes: ['Notes', 'notes'], clock: ['Horloge', 'clock'] }[k];
+        var s = JSON.parse(localStorage.getItem('sx.settings') || '{}') || {};
+        if (s.theme === 'classic') {
+          document.documentElement.setAttribute('data-theme', 'classic');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#000000');
+        }
+        var k = s.installIcon;
+        var m = { classic: ['SearchX', 'classic'], calc: ['Calculatrice', 'calc'], notes: ['Notes', 'notes'], clock: ['Horloge', 'clock'] }[k];
         if (!m) return;
         document.getElementById('meta-app-title').setAttribute('content', m[0]);
         document.getElementById('link-touch-icon').setAttribute('href', 'icons/' + m[1] + '-180.png');

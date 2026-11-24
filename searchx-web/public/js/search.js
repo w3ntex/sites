@@ -4,7 +4,7 @@
 
 import { state, notify, emptySearch, toast, persist } from './state.js';
 import { SOURCES, SOURCE_ORDER } from './config.js';
-import { searchSource } from './api.js';
+import { searchSource, REFUSED_MESSAGE } from './api.js';
 import { isQueryAllowed } from './shared/safety.js';
 import { save } from './lib/storage.js';
 
@@ -37,13 +37,7 @@ export function clearRecent() {
 export function runSearch(raw) {
   const q = String(raw || '').trim();
   if (!q) return;
-  if (!isQueryAllowed(q)) {
-    abortAll();
-    generation++;
-    state.search = { ...emptySearch(), notice: "Cette recherche n'est pas autorisée : SearchX ne cherche jamais de contenu impliquant des mineurs." };
-    notify();
-    return;
-  }
+  if (!allowed(q)) { start(q); return; } // shows the refusal, not remembered
   if (!activeSources().length) {
     toast('Aucune source activée pour ce type de média.');
     return;
@@ -52,9 +46,19 @@ export function runSearch(raw) {
   start(q);
 }
 
+function allowed(q) {
+  return isQueryAllowed(q, { drawn: Boolean(state.settings.hentai) });
+}
+
 function start(q, { fresh = false } = {}) {
   abortAll();
   const g = ++generation;
+  if (!allowed(q)) {
+    // Kept in the field so the user sees what was refused; nothing is sent anywhere.
+    state.search = { ...emptySearch(), query: q, notice: REFUSED_MESSAGE };
+    notify();
+    return;
+  }
   const S = emptySearch();
   S.query = q;
   S.loading = true;
@@ -115,6 +119,11 @@ async function fetchOne(g, src, page, fresh = false) {
   notify();
 }
 
+/** Runs the current search again (e.g. after switching hentai mode on or off). */
+export function rerunSearch() {
+  if (state.search.query) runSearch(state.search.query);
+}
+
 export function canLoadMore() {
   const S = state.search;
   if (!S.query || S.loading || S.loadingMore) return false;
@@ -161,7 +170,7 @@ export function setFilters(patch) {
   state.filters = next;
   save('filters', next);
   const S = state.search;
-  if (!S.query) { notify(); return; }
+  if (!S.query || S.notice) { notify(); return; }
 
   // A different media type changes what every source must be asked → new search.
   if (old.media !== next.media) { start(S.query); return; }

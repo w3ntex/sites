@@ -2,7 +2,7 @@
 // adult sites server-side (browsers can't call them directly because of CORS).
 //
 //   GET /api/health
-//   GET /api/search?src=<source>&q=<query>&page=1&sort=relevance&media=all&dur=any&hd=any[&cursor=]
+//   GET /api/search?src=<source>&q=<query>&page=1&sort=relevance&media=all&dur=any&hd=any[&cursor=][&scope=hentai]
 //   GET /api/suggest?q=<text>            Rule34 tag autocomplete
 //   GET /api/dl?url=<direct media>&name= download passthrough (whitelisted media hosts)
 
@@ -16,7 +16,7 @@ import * as rule34 from './sources/rule34.js';
 import * as redgifs from './sources/redgifs.js';
 import * as reddit from './sources/reddit.js';
 
-export const VERSION = '2.3.0';
+export const VERSION = '2.4.0';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit };
 const SORTS = new Set(['relevance', 'views', 'newest', 'rating']);
@@ -77,7 +77,11 @@ async function handleSearch(request, url, env, ctx) {
   if (!source) return json({ ok: false, error: `Source inconnue : ${src}` }, 400);
   const q = (params.get('q') || '').trim().slice(0, 200);
   if (!q) return json({ ok: false, error: 'Recherche vide.' }, 400);
-  if (!isQueryAllowed(q)) {
+  // Hentai mode (sent by the app): Reddit searches the hentai subreddits.
+  const scope = params.get('scope') === 'hentai' ? 'hentai' : '';
+  // Drawn content gets the stricter rules (see safety.js).
+  const drawn = src === 'rule34' || scope === 'hentai';
+  if (!isQueryAllowed(q, { drawn })) {
     return json({ ok: false, error: "Cette recherche n'est pas autorisée : SearchX ne cherche jamais de contenu impliquant des mineurs." }, 400);
   }
   const opts = {
@@ -88,20 +92,21 @@ async function handleSearch(request, url, env, ctx) {
     dur: pick(params.get('dur'), DURS, 'any'),
     hd: pick(params.get('hd'), QUALITIES, 'any'),
     cursor: (params.get('cursor') || '').slice(0, 300),
+    scope,
     env,
     request
   };
 
   // Cache key: the normalized query (+ whether Rule34 credentials were sent).
   const keyUrl = new URL('https://cache.searchx/search');
-  for (const k of ['q', 'page', 'sort', 'media', 'dur', 'hd', 'cursor']) keyUrl.searchParams.set(k, String(opts[k]));
+  for (const k of ['q', 'page', 'sort', 'media', 'dur', 'hd', 'cursor', 'scope']) keyUrl.searchParams.set(k, String(opts[k]));
   keyUrl.searchParams.set('src', src);
   if (src === 'rule34') keyUrl.searchParams.set('cred', request.headers.get('x-r34-key') ? '1' : '0');
 
   return cached(request, keyUrl.toString(), ctx, async () => {
     try {
       const out = await withTimeout(source.search(opts), SEARCH_TIMEOUT_MS);
-      const items = (out.items || []).filter(isItemAllowed);
+      const items = (out.items || []).filter(it => isItemAllowed(it, { drawn }));
       return json({ ok: true, src, items, more: Boolean(out.more), cursor: out.cursor || null, tags: out.tags || null },
         200, { 'X-SX-Cacheable': '1' });
     } catch (e) {

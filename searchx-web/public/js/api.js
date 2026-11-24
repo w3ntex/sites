@@ -9,7 +9,8 @@ import {
   REDGIFS_TOKEN_URL, redgifsSearchUrl, parseRedGifs, redgifsMore,
   epornerSearchUrl, parseEporner, epornerMore, pullpushUrl, parsePullPush
 } from './shared/apis.js';
-import { isItemAllowed } from './shared/safety.js';
+import { isItemAllowed, isQueryAllowed } from './shared/safety.js';
+import { sourceQuery } from './config.js';
 
 const DIRECT_RETRY_MS = 3600 * 1000;
 const direct = load('direct', {}) || {};
@@ -169,7 +170,7 @@ async function pullpushDirect(p, signal, redditError = null) {
     throw e;
   }
   try {
-    const r = parsePullPush(await directJSON(pullpushUrl({ q: p.q, cursor: p.page > 1 ? p.cursor : '' }), signal));
+    const r = parsePullPush(await directJSON(pullpushUrl({ q: p.q, cursor: p.page > 1 ? p.cursor : '', scope: p.scope }), signal));
     markDirect('pullpush', true);
     return r;
   } catch (e) {
@@ -185,7 +186,7 @@ async function redditDirect(p, signal) {
   let redditError = null;
   if (canDirect('reddit')) {
     try {
-      const urls = redditUrls({ q: p.q, sort: p.sort, cursor: p.cursor, page: p.page });
+      const urls = redditUrls({ q: p.q, sort: p.sort, cursor: p.cursor, page: p.page, scope: p.scope });
       const one = async url => {
         if (!url) return { items: [], after: null };
         try {
@@ -212,8 +213,9 @@ async function redditDirect(p, signal) {
 
 const DIRECT = { redgifs: redgifsDirect, eporner: epornerDirect, reddit: redditDirect };
 
-function finish(src, r, via) {
-  return { ok: true, src, items: (r.items || []).filter(isItemAllowed), more: Boolean(r.more), cursor: r.cursor || null, tags: r.tags || null, via };
+function finish(src, r, via, drawn) {
+  const items = (r.items || []).filter(it => isItemAllowed(it, { drawn }));
+  return { ok: true, src, items, more: Boolean(r.more), cursor: r.cursor || null, tags: r.tags || null, via };
 }
 
 async function workerSearch(src, params, signal) {
@@ -221,12 +223,21 @@ async function workerSearch(src, params, signal) {
     src, q: params.q, page: String(params.page), sort: params.sort, media: params.media, dur: params.dur, hd: params.hd
   });
   if (params.cursor) p.set('cursor', params.cursor);
+  if (params.scope) p.set('scope', params.scope);
   if (params.fresh) p.set('fresh', '1');
   const body = await getJSON(`api/search?${p}`, signal);
   return { ...body, via: 'server' };
 }
 
-export async function searchSource(src, params, signal) {
+export const REFUSED_MESSAGE = "Cette recherche n'est pas autorisée : SearchX ne cherche jamais de contenu impliquant des mineurs.";
+
+export async function searchSource(src, input, signal) {
+  // Hentai mode steers every source towards hentai; drawn content always gets the strict rules.
+  const hentai = Boolean(state.settings.hentai);
+  const drawn = hentai || src === 'rule34';
+  if (!isQueryAllowed(input.q, { drawn })) throw new Error(REFUSED_MESSAGE);
+  const params = { ...input, q: sourceQuery(src, input.q, hentai), scope: hentai && src === 'reddit' ? 'hentai' : '' };
+
   let directError = null;
   const fn = DIRECT[src];
   if (fn) {
@@ -234,7 +245,7 @@ export async function searchSource(src, params, signal) {
       try {
         const r = await fn(params, signal);
         if (src !== 'reddit') markDirect(src, true);
-        return finish(src, r, 'phone');
+        return finish(src, r, 'phone', drawn);
       } catch (e) {
         if (signal?.aborted) throw e;
         if (src !== 'reddit') markDirect(src, false, e);
@@ -245,7 +256,7 @@ export async function searchSource(src, params, signal) {
     }
   }
   try {
-    return await workerSearch(src, params, signal);
+    return finish(src, await workerSearch(src, params, signal), 'server', drawn);
   } catch (e) {
     if (directError && !signal?.aborted) e.phone = src === 'reddit' ? directError.message : (directError.skipped ? directError.message : phoneReason(directError));
     throw e;

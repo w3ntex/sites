@@ -6,6 +6,9 @@ export const PRIORITY_SUBREDDITS = [
   'NSFW_HTML5', '60fpsporn', 'hentai', 'rule34'
 ];
 
+/** Hentai mode: searched instead of the general list, and the global search gets "hentai". */
+export const HENTAI_SUBREDDITS = ['hentai', 'HENTAI_GIF', 'rule34', 'ecchi', 'futanari'];
+
 const SORTS = { relevance: 'relevance', views: 'top', rating: 'top', newest: 'new' };
 
 /** Cursor format: "p:<after>|g:<after>" (one per listing); empty = first page. */
@@ -23,20 +26,26 @@ export function makeCursor(p, g) {
   return `p:${p || ''}|g:${g || ''}`;
 }
 
-/** The two listing URLs (priority subreddits + global search). `null` = listing exhausted. */
-export function redditUrls({ q, sort = 'relevance', cursor = '', page = 1, base = 'https://www.reddit.com' }) {
+/**
+ * The two listing URLs (priority subreddits + global search). `null` = listing exhausted.
+ * scope "hentai": the hentai subreddits, and the global search is narrowed to hentai.
+ */
+export function redditUrls({ q, sort = 'relevance', cursor = '', page = 1, base = 'https://www.reddit.com', scope = '' }) {
   const s = SORTS[sort] || 'relevance';
   const c = parseCursor(cursor);
-  const common = { q, include_over_18: 'on', limit: '50', sort: s, t: 'all', raw_json: '1' };
+  const hentai = scope === 'hentai';
+  const common = { include_over_18: 'on', limit: '50', sort: s, t: 'all', raw_json: '1' };
   const mk = (path, extra, after) => {
     const p = new URLSearchParams({ ...common, ...extra });
     if (after) p.set('after', after);
     return `${base}${path}?${p}`;
   };
   const later = page > 1;
+  const subs = hentai ? HENTAI_SUBREDDITS : PRIORITY_SUBREDDITS;
+  const globalQ = hentai && !/\bhentai\b/i.test(q) ? `${q} hentai` : q;
   return {
-    priority: later && !c.p ? null : mk(`/r/${PRIORITY_SUBREDDITS.join('+')}/search.json`, { restrict_sr: 'on' }, c.p),
-    global: later && !c.g ? null : mk('/search.json', { type: 'link' }, c.g)
+    priority: later && !c.p ? null : mk(`/r/${subs.join('+')}/search.json`, { q, restrict_sr: 'on' }, c.p),
+    global: later && !c.g ? null : mk('/search.json', { q: globalQ, type: 'link' }, c.g)
   };
 }
 

@@ -174,7 +174,7 @@ function SourceErrorSheet({ src }) {
     ${src === 'rule34' && /clé|API/i.test(per?.error || '') && html`<p class="sheet-text">Ajoute ta clé dans Réglages → Sources → Identifiants Rule34.</p>`}
     <div class="sheet-buttons col">
       <button type="button" class="btn" onClick=${() => { retrySource(src); close(); }}>Réessayer</button>
-      ${state.search.query && html`<a class="btn ghost" href=${siteSearchUrl(src, state.search.query)} target="_blank" rel="noopener noreferrer"
+      ${state.search.query && html`<a class="btn ghost" href=${siteSearchUrl(src, state.search.query, { hentai: state.settings.hentai })} target="_blank" rel="noopener noreferrer"
         onClick=${() => haptic()}><${Icon} name="external" size=${16} /> Chercher « ${state.search.query} » sur ${SOURCES[src]?.name}</a>`}
       <button type="button" class="btn ghost" onClick=${() => { disableSources([src]); toast(`${SOURCES[src].name} désactivé`); close(); }}>Désactiver ${SOURCES[src]?.name}</button>
       ${src === 'rule34' && html`<button type="button" class="btn ghost" onClick=${() => { state.tab = 'settings'; close(); notify(); }}>Ouvrir les réglages</button>`}
