@@ -160,8 +160,110 @@ export function redditJSON(n = 25, base = '', after = 't3_next') {
   return { kind: 'Listing', data: { after, children } };
 }
 
+// ---- v2.5 sources ---------------------------------------------------------------------------------
+
+export const NITTER = 'nitter.mie.foundation';
+
+/** Nitter RSS: photos, videos, X "GIFs" and a two-photo post (search or account media feed). */
+export function nitterRss({ account = null, n = 8, q = 'sample' } = {}) {
+  const title = account ? `Sample Creator / @${account}` : `Search results for "${q}"`;
+  const image = account ? `<image><title>${title}</title><link>http://${NITTER}/${account}</link><url>http://${NITTER}/pic/https%3A%2F%2Fpbs.twimg.com%2Fprofile_images%2F111%2Favatar_400x400.jpg</url><width>128</width><height>128</height></image>` : '';
+  let items = '';
+  for (let i = 0; i < n; i++) {
+    const user = account || `creator${i % 3}`;
+    const id = 2100000000000000000n + BigInt(i);
+    const kind = i % 4;
+    const link = `http://${NITTER}/${user}/status/${id}#m`;
+    let media;
+    if (kind === 0) media = `<img src="http://${NITTER}/pic/media%2FHXsample${i}A.jpg" style="max-width:250px;" />`;
+    else if (kind === 1) media = `<a href="${link}"> <br>Video<br> <img src="http://${NITTER}/pic/amplify_video_thumb%2F${id}%2Fimg%2Fthumb${i}.jpg" style="max-width:250px;" /> </a>`;
+    else if (kind === 2) media = `<a href="${link}"> <br>Gif<br> <img src="http://${NITTER}/pic/tweet_video_thumb%2FGIFsample${i}.jpg" style="max-width:250px;" /> </a>`;
+    else media = `<img src="http://${NITTER}/pic/media%2FHXsample${i}A.jpg" style="max-width:250px;" /> <img src="http://${NITTER}/pic/media%2FHXsample${i}B.jpg" style="max-width:250px;" />`;
+    const text = `Sample post ${i + 1} about ${q}`;
+    items += `<item><title>${text}</title><dc:creator>@${user}</dc:creator><description><![CDATA[<p>${text}</p> ${media}]]></description>` +
+      `<pubDate>Fri, 20 Nov 2026 0${i % 10}:00:01 GMT</pubDate><guid isPermaLink="false">${id}</guid><link>${link}</link></item>\n`;
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?><rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0"><channel>` +
+    `<title>${title}</title><link>http://${NITTER}/${account || 'search'}</link><description>Twitter feed</description>${image}\n${items}</channel></rss>`;
+}
+
+/** A Nitter post page with a video (HLS player + download links in two sizes). */
+export function nitterStatusHtml(id = '2100000000000000001') {
+  const v = encodeURIComponent(`https://video.twimg.com/amplify_video/${id}/vid/avc1/720x1280/small.mp4?tag=29`);
+  const big = encodeURIComponent(`https://video.twimg.com/amplify_video/${id}/vid/avc1/1080x1920/big.mp4?tag=29`);
+  const hls = encodeURIComponent(`https://video.twimg.com/amplify_video/${id}/pl/list.m3u8?tag=29&v=081`);
+  return `<html><body><div class="main-tweet"><video poster="/pic/amplify_video_thumb%2F${id}%2Fimg%2Fx.jpg" data-url="/video/AB12/${hls}" data-autoload="false" data-type="hls"></video>` +
+    `<a class="video-download" href="/video/CD34/${v}" download="">small</a><a class="video-download" href="/video/EF56/${big}" download="">big</a></div></body></html>`;
+}
+
+export function hstreamHtml(n = 12, page = 1) {
+  let out = '<html><head><title>Search | hstream.moe</title></head><body><input type="hidden" id="ts_reference" value="1" /><div class="grid">';
+  for (let k = 0; k < n; k++) {
+    const i = (page - 1) * n + k;
+    const slug = `sample-series-${Math.floor(i / 2) + 1}-${(i % 2) + 1}`;
+    out += `<div wire:key="episode-${1000 + i}"> <div class="group w-full p-1"> <a href="https://hstream.moe/hentai/${slug}" class="block overflow-hidden rounded-2xl" >` +
+      ` <div class="relative overflow-hidden"> <img src="/images/hentai/sample-series-${Math.floor(i / 2) + 1}/gallery-ep-${(i % 2) + 1}-0-thumbnail.webp" alt="Sample Series ${Math.floor(i / 2) + 1} - ${(i % 2) + 1}" loading="lazy" width="1000" data-gallery='["x"]' class="preview-gallery" >` +
+      ` <div class="pointer-events-none absolute inset-x-0 top-0 z-20 flex"> <div class="ml-auto rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold"> ${i % 3 === 0 ? '4k | FHD 48fps' : 'FHD'} </div> </div>` +
+      ` <div class="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4"> <h3 class=" text-sm font-semibold"> Sample Series ${Math.floor(i / 2) + 1} - ${(i % 2) + 1} </h3>` +
+      ` <div class="mt-3 flex"> <span class="flex items-center gap-1"> <i class="fa-regular fa-eye text-neutral-200 font-bold"></i> ${100 + i}k </span>` +
+      ` <span class="flex items-center gap-1"> <i class="fa-regular fa-heart text-neutral-200 font-bold"></i> ${300 + i} </span> </div> </div> </div> </a> </div> </div>\n`;
+  }
+  return out + '</div></body></html>';
+}
+
+export function r34videoHtml(n = 24) {
+  let out = '<html><head><title>Search Results for sample</title></head><body><div class="thumbs">';
+  for (let i = 0; i < n; i++) {
+    const id = 3500000 + i;
+    out += `<div class="item thumb video_${id} " data-video-card-id="${id}" > <a class="th" href="https://rule34video.com/video/${id}/sample-${i}/" title="Sample animation ${i + 1}">` +
+      ` <div class="img wrap_image" data-watched-label="Watched" data-preview="https://rule34video.com/get_file/47/abc/${id}/${id}_preview.mp4/">` +
+      ` <img class="thumb" src="https://rule34video.com/contents/videos_screenshots/3500000/${id}/336x189/1.jpg" alt="Sample" width="320" height="180"/>` +
+      `${i % 2 ? ' <div class="quality"> <svg class="custom-svg custom-hd"><use xlink:href="#custom-hd"></use></svg> </div>' : ''}` +
+      ` <div class="time">${i % 5}:${String(10 + i).padStart(2, '0')}</div> </div> <div class="thumb_title">Sample animation ${i + 1}</div> </a> </div>\n`;
+  }
+  return out + '</div></body></html>';
+}
+
+export function danbooruJSON(n = 6) {
+  const posts = [];
+  for (let i = 0; i < n; i++) {
+    posts.push({
+      id: 12600000 + i, rating: 'e', file_ext: i === 2 ? 'mp4' : 'jpg', score: 50 - i, image_width: 2000, image_height: 3000,
+      file_url: `https://cdn.donmai.us/original/aa/bb/file${i}.${i === 2 ? 'mp4' : 'jpg'}`,
+      large_file_url: `https://cdn.donmai.us/sample/aa/bb/sample-file${i}.jpg`,
+      preview_file_url: `https://cdn.donmai.us/180x180/aa/bb/file${i}.jpg`,
+      media_asset: { variants: [{ type: '180x180', url: `https://cdn.donmai.us/180x180/aa/bb/file${i}.jpg` }, { type: '720x720', url: `https://cdn.donmai.us/720x720/aa/bb/file${i}.webp` }] },
+      tag_string: 'elf 1girl large_breasts sample_tag', tag_string_general: '1girl large_breasts', tag_string_character: i % 2 ? 'sample_character' : '',
+      tag_string_artist: 'sample_artist', created_at: '2026-11-24T10:55:16.718-05:00'
+    });
+  }
+  posts.push({ ...posts[0], id: 1, rating: 'q' });                       // not explicit: skipped
+  posts.push({ ...posts[0], id: 2, file_ext: 'zip' });                    // ugoira: skipped
+  posts.push({ ...posts[0], id: 3, tag_string: 'elf oppai_loli 1girl' }); // minor tag: dropped by safety
+  return posts;
+}
+
+export const danbooruAutocomplete = q => (q === 'milf'
+  ? [{ type: 'tag-alias', label: 'mature female', value: 'mature_female', post_count: 52007, antecedent: 'milf' }]
+  : [{ type: 'tag', label: q, value: q.replace(/\s+/g, '_') + (q === 'tentacle' ? 's' : ''), post_count: 1000 }, { type: 'tag', label: `${q} x`, value: `${q.replace(/\s+/g, '_')}_x`, post_count: 5 }]);
+
+export function yandereJSON(n = 5) {
+  const posts = [];
+  for (let i = 0; i < n; i++) {
+    posts.push({
+      id: 1273000 + i, rating: 'e', file_ext: 'png', score: 12 + i, width: 4000, height: 6000, author: 'sample_author', created_at: 1795000000 - i,
+      tags: 'elf thighhighs sample_tag', file_url: `https://files.yande.re/image/h${i}/file.png`,
+      sample_url: `https://files.yande.re/sample/h${i}/sample.jpg`, sample_width: 1060, preview_url: `https://assets.yande.re/data/preview/h${i}.jpg`
+    });
+  }
+  posts.push({ ...posts[0], id: 9, rating: 's' });
+  return posts;
+}
+
 /** fetch() replacement answering like the real sites (for tests / mock dev server). */
 export function mockFetch(base = '', { failSources = [] } = {}) {
+  let redgifsTokens = 0;
+  let redgifsRetried = false;
   return async function fetch(input, init = {}) {
     const url = new URL(typeof input === 'string' ? input : input.url);
     const host = url.hostname;
@@ -196,8 +298,36 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
       return json(rule34JSON(42, base, (parseInt(url.searchParams.get('pid') || '0', 10) || 0) + 1, tags.split(' ')[0]));
     }
     if (host === 'api.redgifs.com') {
-      if (url.pathname.includes('/auth/temporary')) return json({ token: 'tok', addr: '1.2.3.4', agent: 'x' });
-      return failing('redgifs') ? json({ error: 'x' }, 401) : json(redgifsJSON(40, base, page));
+      if (url.pathname.includes('/auth/temporary')) return json({ token: `tok${++redgifsTokens}` });
+      if (failing('redgifs')) return json({ error: { code: 'x' } }, 401);
+      if (failing('redgifs-wrongsender') && !redgifsRetried) {
+        redgifsRetried = true;
+        return json({ error: { code: 'WrongSender', message: 'This token belongs to a different device, please request a new one.', status: 401 } }, 401);
+      }
+      // The search words must be sent as `query` (RedGIFs ignores `search_text`).
+      if (!url.searchParams.get('query')) return json({ page, pages: 1, total: 0, gifs: [] });
+      return json(redgifsJSON(40, base, page));
+    }
+    if (host === NITTER || host.startsWith('nitter.')) {
+      if (failing('x') || host !== NITTER) return text('<html><head><title>Attention Required! | Cloudflare</title></head></html>', 403);
+      const path = url.pathname;
+      if (path === '/search/rss') return new Response(nitterRss({ q: url.searchParams.get('q') || '', n: 8 }), { headers: { 'content-type': 'application/rss+xml' } });
+      const acc = /^\/([A-Za-z0-9_]+)\/media\/rss$/.exec(path);
+      if (acc) return acc[1] === 'nobody' ? text('User not found', 404) : new Response(nitterRss({ account: acc[1], n: 12 }), { headers: { 'content-type': 'application/rss+xml' } });
+      const st = /^\/[A-Za-z0-9_]+\/status\/(\d+)$/.exec(path);
+      if (st) return text(nitterStatusHtml(st[1]));
+      return text('not found', 404);
+    }
+    if (host === 'hstream.moe') return failing('hstream') ? text('<html><title>Just a moment...</title></html>', 403) : text(hstreamHtml(url.searchParams.get('page') === '2' ? 5 : 25, page));
+    if (host === 'rule34video.com') return failing('r34video') ? text('x', 503) : text(r34videoHtml(24));
+    if (host === 'danbooru.donmai.us') {
+      if (url.pathname === '/autocomplete.json') return json(danbooruAutocomplete(url.searchParams.get('search[query]') || ''));
+      if (url.searchParams.get('tags')?.split(' ').length > 2) return json({ success: false, error: 'PostQuery::TagLimitError', message: 'You cannot search for more than 2 tags at a time.' }, 422);
+      return json(danbooruJSON(6));
+    }
+    if (host === 'yande.re') {
+      if (url.pathname === '/tag.json') return json(url.searchParams.get('name') === 'tentacle' ? [{ name: 'tentacles', count: 4043 }] : [{ name: url.searchParams.get('name'), count: 10 }]);
+      return json(yandereJSON(5));
     }
     if (host.endsWith('reddit.com')) return failing('reddit') ? text('<html><title>Blocked</title>blocked</html>', 403) : json(redditJSON(25, base, page < 3 ? `t3_p${page}` : null));
     if (host === 'api.pullpush.io') {

@@ -2,8 +2,11 @@ import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Sheet, Switch, SourceBadge, Thumb, cx } from './common.js';
 import { state, closeSheet, openSheet, toast, notify, updateSettings } from '../state.js';
-import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl } from '../config.js';
-import { setFilters, resetFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch, disableSources } from '../search.js';
+import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl, modeOf, modeSources } from '../config.js';
+import {
+  setFilters, resetFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch, disableSources,
+  isFollowing, toggleFollow
+} from '../search.js';
 import { toggleFavorite, isFavorite, addToPlaylist, createPlaylist } from '../library.js';
 import { downloadUrl } from '../api.js';
 import { haptic } from '../lib/haptics.js';
@@ -21,21 +24,22 @@ function OptionsSheet({ title, options, value, onPick }) {
 
 function SourcesSheet() {
   const f = state.filters;
+  const list = modeSources(modeOf(state.settings));
   const toggle = src => {
     const sources = f.sources.includes(src) ? f.sources.filter(s => s !== src) : [...f.sources, src];
     setFilters({ sources: SOURCE_ORDER.filter(s => sources.includes(s)) });
   };
   return html`<${Sheet} title="Sources" onClose=${closeSheet}>
     <div class="options">
-      ${SOURCE_ORDER.map(src => html`<div class="option static" key=${src}>
+      ${list.map(src => html`<div class="option static" key=${src}>
         <${SourceBadge} src=${src} />
         <span class="grow">${SOURCES[src].name}</span>
         <${Switch} checked=${f.sources.includes(src)} onChange=${() => toggle(src)} label=${SOURCES[src].name} />
       </div>`)}
     </div>
     <div class="sheet-buttons">
-      <button type="button" class="btn ghost" onClick=${() => setFilters({ sources: SOURCE_ORDER.slice() })}>Tout activer</button>
-      <button type="button" class="btn ghost" onClick=${() => setFilters({ sources: [] })}>Tout désactiver</button>
+      <button type="button" class="btn ghost" onClick=${() => setFilters({ sources: [...new Set([...f.sources, ...list])] })}>Tout activer</button>
+      <button type="button" class="btn ghost" onClick=${() => setFilters({ sources: f.sources.filter(s => !list.includes(s)) })}>Tout désactiver</button>
     </div>
   <//>`;
 }
@@ -81,6 +85,8 @@ function CreatorsSheet() {
 function ItemActionsSheet({ item }) {
   const fav = isFavorite(item.id);
   const dl = downloadUrl(item);
+  const xUser = item.src === 'x' ? (item.user || String(item.by?.[0] || '').replace(/^@/, '')) : null;
+  const following = xUser && isFollowing(xUser);
   const share = async () => {
     try {
       if (navigator.share) await navigator.share({ url: item.url });
@@ -102,7 +108,13 @@ function ItemActionsSheet({ item }) {
       <button type="button" class="action" onClick=${() => openSheet('playlist', { item })}>
         <${Icon} name="listPlus" /><span>Ajouter à une playlist…</span>
       </button>
-      ${(item.by || []).slice(0, 3).map(name => html`<button type="button" class="action" key=${name}
+      ${xUser ? html`<button type="button" class="action" onClick=${() => { state.viewer = null; state.tab = 'search'; close(); runSearch(`@${xUser}`); }}>
+          <${Icon} name="at" /><span>Voir le compte @${xUser}</span>
+        </button>
+        <button type="button" class="action" onClick=${() => { toast(toggleFollow({ user: xUser }) ? `@${xUser} suivi` : `@${xUser} n'est plus suivi`); close(); }}>
+          <${Icon} name=${following ? 'userCheck' : 'userPlus'} /><span>${following ? `Ne plus suivre @${xUser}` : `Suivre @${xUser}`}</span>
+        </button>`
+      : (item.by || []).slice(0, 3).map(name => html`<button type="button" class="action" key=${name}
         onClick=${() => { showOnlyCreator(name); state.viewer = null; state.tab = 'search'; close(); }}>
         <${Icon} name="user" /><span>Seulement ${name}</span>
       </button>`)}
@@ -174,11 +186,43 @@ function SourceErrorSheet({ src }) {
     ${src === 'rule34' && /clé|API/i.test(per?.error || '') && html`<p class="sheet-text">Ajoute ta clé dans Réglages → Sources → Identifiants Rule34.</p>`}
     <div class="sheet-buttons col">
       <button type="button" class="btn" onClick=${() => { retrySource(src); close(); }}>Réessayer</button>
-      ${state.search.query && html`<a class="btn ghost" href=${siteSearchUrl(src, state.search.query, { hentai: state.settings.hentai })} target="_blank" rel="noopener noreferrer"
+      ${state.search.query && html`<a class="btn ghost" href=${siteSearchUrl(src, state.search.query, { mode: modeOf(state.settings) })} target="_blank" rel="noopener noreferrer"
         onClick=${() => haptic()}><${Icon} name="external" size=${16} /> Chercher « ${state.search.query} » sur ${SOURCES[src]?.name}</a>`}
       <button type="button" class="btn ghost" onClick=${() => { disableSources([src]); toast(`${SOURCES[src].name} désactivé`); close(); }}>Désactiver ${SOURCES[src]?.name}</button>
       ${src === 'rule34' && html`<button type="button" class="btn ghost" onClick=${() => { state.tab = 'settings'; close(); notify(); }}>Ouvrir les réglages</button>`}
     </div>`}<//>`;
+}
+
+/** Followed X accounts: add (@name), open, remove. */
+function XAccountsSheet() {
+  const [name, setName] = useState('');
+  const input = useRef(null);
+  const user = name.trim().replace(/^@/, '');
+  const valid = /^\w{1,15}$/.test(user);
+  const add = () => {
+    if (!valid) return;
+    haptic();
+    if (!isFollowing(user)) toggleFollow({ user });
+    setName('');
+    toast(`@${user} ajouté`);
+  };
+  return html`<${Sheet} title="Comptes X" onClose=${closeSheet} tall>${close => html`
+    <form class="inline-form" onSubmit=${e => { e.preventDefault(); add(); }}>
+      <input ref=${input} type="text" placeholder="@nom du compte" value=${name} onInput=${e => setName(e.currentTarget.value)}
+        autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="16" />
+      <button type="submit" class="btn small" disabled=${!valid}>Suivre</button>
+    </form>
+    <div class="options">
+      ${state.xFollows.map(f => html`<div class="option static" key=${f.user}>
+        <span class="xavatar small">${f.avatar ? html`<${Thumb} src=${f.avatar} />` : html`<${Icon} name="user" size=${16} />`}</span>
+        <button type="button" class="grow xacc-open" onClick=${() => { close(); state.tab = 'search'; runSearch(`@${f.user}`); }}>
+          ${f.name || f.user}<small>@${f.user}</small></button>
+        <button type="button" class="icon-btn subtle" aria-label=${`Ne plus suivre @${f.user}`} onClick=${() => { haptic(); toggleFollow({ user: f.user }); }}>
+          <${Icon} name="x" size=${16} /></button>
+      </div>`)}
+      ${!state.xFollows.length && html`<p class="muted center pad">Aucun compte suivi. Ajoute un compte ci-dessus, ou touche « Suivre » sur la page d'un compte.</p>`}
+    </div>
+    <p class="sheet-hint">Les comptes suivis s'affichent sur l'accueil du mode porno. Tout reste sur ce téléphone.</p>`}<//>`;
 }
 
 function FiltersSheet({ target = 'current' }) {
@@ -200,6 +244,7 @@ function FiltersSheet({ target = 'current' }) {
     const sources = f.sources.includes(src) ? f.sources.filter(x => x !== src) : [...f.sources, src];
     set({ sources: SOURCE_ORDER.filter(x => sources.includes(x)) });
   };
+  const mine = modeSources(modeOf(state.settings));
   const durOK = f.media === 'all' || f.media === 'video';
   return html`<${Sheet} title=${isDefault ? 'Filtres par défaut' : 'Filtres'} onClose=${closeSheet} tall
     actions=${!isDefault ? html`<button type="button" class="text-btn" onClick=${() => { haptic(); resetFilters(); }}>Réinitialiser</button>` : null}>
@@ -208,8 +253,8 @@ function FiltersSheet({ target = 'current' }) {
     ${pick('Qualité', 'sparkles', HD_OPTIONS, 'hd')}
     ${pick('Trier par', 'sort', SORT_OPTIONS, 'sort')}
     <div class="pick">
-      <span class="pick-label"><${Icon} name="sliders" size=${15} />Sources (${f.sources.length}/${SOURCE_ORDER.length})</span>
-      <div class="pick-opts">${SOURCE_ORDER.map(src => html`<button type="button" key=${src}
+      <span class="pick-label"><${Icon} name="sliders" size=${15} />Sites (${mine.filter(s => f.sources.includes(s)).length}/${mine.length})</span>
+      <div class="pick-opts">${mine.map(src => html`<button type="button" key=${src}
         class=${cx('pill src-pill', f.sources.includes(src) && 'on')} style=${`--c:${SOURCES[src].color}`}
         onClick=${() => { haptic(); toggleSource(src); }}><i class="dotc"></i>${SOURCES[src].name}</button>`)}</div>
     </div>
@@ -221,7 +266,7 @@ function FiltersSheet({ target = 'current' }) {
           Aperçus animés</button></div>
     </div>`}
     <p class="sheet-hint">${isDefault ? 'Appliqués au démarrage et quand tu réinitialises les filtres.'
-      : "Durée, qualité, tri et sources s'appliquent tout de suite aux résultats déjà chargés. Changer le type relance la recherche."}</p>
+      : "Durée, qualité et tri s'appliquent tout de suite aux résultats déjà chargés. Changer le type relance la recherche. Chaque site s'affiche dans son propre onglet."}</p>
   <//>`;
 }
 
@@ -238,6 +283,7 @@ export function SheetHost() {
     case 'prompt': return html`<${PromptSheet} key=${s.title} ...${s} />`;
     case 'sourceError': return html`<${SourceErrorSheet} src=${s.src} />`;
     case 'filters': return html`<${FiltersSheet} target=${s.target} />`;
+    case 'xaccounts': return html`<${XAccountsSheet} />`;
     default: return s.render ? s.render() : null;
   }
 }

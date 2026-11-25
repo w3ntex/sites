@@ -7,7 +7,7 @@ import { requestPersistence } from './lib/storage.js';
 import { health } from './api.js';
 import { APP_VERSION } from './config.js';
 
-applyTheme(state.settings.theme);
+applyTheme(state.settings.mode);
 applyInstallIcon(state.settings.installIcon);
 requestPersistence();
 

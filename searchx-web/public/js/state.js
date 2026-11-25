@@ -3,26 +3,36 @@ import { load, save } from './lib/storage.js';
 import { DEFAULT_FILTERS, DEFAULT_SETTINGS, SOURCE_ORDER } from './config.js';
 
 function loadFilters(key) {
-  const f = { ...DEFAULT_FILTERS, ...(load(key, {}) || {}) };
-  f.sources = Array.isArray(f.sources) ? f.sources.filter(s => SOURCE_ORDER.includes(s)) : DEFAULT_FILTERS.sources.slice();
+  const saved = load(key, {}) || {};
+  const f = { ...DEFAULT_FILTERS, ...saved };
+  // v2.5: new sources per mode; older saved lists are replaced by the new defaults.
+  if (saved.v !== DEFAULT_FILTERS.v || !Array.isArray(f.sources)) f.sources = DEFAULT_FILTERS.sources.slice();
+  f.sources = f.sources.filter(s => SOURCE_ORDER.includes(s));
+  f.v = DEFAULT_FILTERS.v;
   return f;
 }
 
 export function emptySearch() {
   return {
     query: '',
-    per: {},            // per source: { state, items, page, more, cursor, error, tags }
+    per: {},            // per source: { state, items, page, more, cursor, error, tags, profile }
+    tab: null,          // the site shown (results are never mixed)
+    tabChosen: false,   // the user picked the tab (no automatic switching any more)
     results: [],
     creators: [],
     selectedCreators: [],
-    visibleSources: [],
     loading: false,
     loadingMore: false,
     notice: null
   };
 }
 
-const settings = { ...DEFAULT_SETTINGS, ...(load('settings', {}) || {}) };
+const savedSettings = load('settings', {}) || {};
+const settings = { ...DEFAULT_SETTINGS, ...savedSettings };
+// v2.4 → v2.5: "Mode hentai" switch + theme became a single mode (porn / hentai).
+if (!savedSettings.mode && (savedSettings.hentai === true || (savedSettings.hentai === undefined && savedSettings.theme === 'hentai'))) settings.mode = 'hentai';
+delete settings.hentai;
+delete settings.theme;
 
 /** The whole app state. Mutated in place by actions, then `notify()` re-renders. */
 export const state = {
@@ -34,6 +44,7 @@ export const state = {
   playlists: load('playlists', []) || [],
   history: load('history', []) || [],
   recent: load('recent', []) || [],
+  xFollows: load('xFollows', []) || [], // X accounts: [{ user, name, avatar }]
   search: emptySearch(),
   viewer: null,        // { items, index }
   sheet: null,         // { type, ...props }

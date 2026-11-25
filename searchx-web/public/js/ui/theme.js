@@ -2,7 +2,7 @@ import { html } from '../../vendor/preact-htm.mjs';
 import { state } from '../state.js';
 
 export function isNeon() {
-  return state.settings.theme !== 'classic';
+  return state.settings.mode === 'hentai';
 }
 
 // Stable pseudo-random numbers (the layout must not change on every re-render).

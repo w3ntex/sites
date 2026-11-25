@@ -6,11 +6,11 @@ import { state } from './state.js';
 import { load, save } from './lib/storage.js';
 import { redditUrls, parseRedditListing, mergeRedditResults } from './shared/reddit.js';
 import {
-  REDGIFS_TOKEN_URL, redgifsSearchUrl, parseRedGifs, redgifsMore,
-  epornerSearchUrl, parseEporner, epornerMore, pullpushUrl, parsePullPush
+  epornerSearchUrl, parseEporner, epornerMore, pullpushUrl, parsePullPush,
+  danbooruAutocompleteUrl, parseDanbooruAutocomplete, danbooruPostsUrl, parseDanbooru
 } from './shared/apis.js';
 import { isItemAllowed, isQueryAllowed } from './shared/safety.js';
-import { sourceQuery } from './config.js';
+import { isStrictSource } from './config.js';
 
 const DIRECT_RETRY_MS = 3600 * 1000;
 const direct = load('direct', {}) || {};
@@ -135,26 +135,30 @@ function jsonpSandboxed(url, signal, timeout = 12000) {
 
 // ---- direct (phone) implementations ------------------------------------------------------------
 
-async function redgifsToken(signal, force = false) {
-  const t = load('rgToken', null);
-  if (!force && t?.token && t.exp > Date.now()) return t.token;
-  const j = await directJSON(REDGIFS_TOKEN_URL, signal);
-  if (!j?.token) throw new Error('RedGIFs : pas de jeton');
-  save('rgToken', { token: j.token, exp: Date.now() + 20 * 3600 * 1000 });
-  return j.token;
-}
+// RedGIFs is not called from the phone: its search API only accepts its own website (CORS), so it
+// always goes through the server.
 
-async function redgifsDirect(p, signal) {
-  const url = redgifsSearchUrl(p);
-  let data;
-  try {
-    data = await directJSON(url, signal, { Authorization: `Bearer ${await redgifsToken(signal)}` });
-  } catch (e) {
-    if (e.status !== 401) throw e;
-    data = await directJSON(url, signal, { Authorization: `Bearer ${await redgifsToken(signal, true)}` });
+/** Danbooru allows calls from any page: words → tags with its autocomplete, then the posts. */
+async function danbooruDirect(p, signal) {
+  const raw = String(p.q || '').trim().toLowerCase();
+  const resolve = async term => {
+    try {
+      const list = parseDanbooruAutocomplete(await directJSON(danbooruAutocompleteUrl(term), signal));
+      return (list.find(t => t.tag === term.replace(/\s+/g, '_')) || list[0] || {}).tag || term.replace(/\s+/g, '_');
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      return term.replace(/\s+/g, '_');
+    }
+  };
+  let tags;
+  if (raw.includes(',')) tags = raw.split(',').map(t => t.trim().replace(/\s+/g, '_')).filter(Boolean).slice(0, 2);
+  else {
+    const words = raw.split(/\s+/).filter(Boolean);
+    const joined = await resolve(raw);
+    tags = words.length <= 1 || joined.split('_').length >= words.length ? [joined] : await Promise.all(words.slice(0, 2).map(resolve));
   }
-  const items = parseRedGifs(data);
-  return { items, more: redgifsMore(data, p.page, items) };
+  const posts = await directJSON(danbooruPostsUrl({ tags, page: p.page }), signal);
+  return { items: parseDanbooru(posts), more: Array.isArray(posts) && posts.length >= 90, tags };
 }
 
 async function epornerDirect(p, signal) {
@@ -211,11 +215,11 @@ async function redditDirect(p, signal) {
   return pullpushDirect(p, signal, redditError);
 }
 
-const DIRECT = { redgifs: redgifsDirect, eporner: epornerDirect, reddit: redditDirect };
+const DIRECT = { eporner: epornerDirect, reddit: redditDirect, danbooru: danbooruDirect };
 
 function finish(src, r, via, drawn) {
   const items = (r.items || []).filter(it => isItemAllowed(it, { drawn }));
-  return { ok: true, src, items, more: Boolean(r.more), cursor: r.cursor || null, tags: r.tags || null, via };
+  return { ok: true, src, items, more: Boolean(r.more), cursor: r.cursor || null, tags: r.tags || null, profile: r.profile || null, via };
 }
 
 async function workerSearch(src, params, signal) {
@@ -232,11 +236,12 @@ async function workerSearch(src, params, signal) {
 export const REFUSED_MESSAGE = "Cette recherche n'est pas autorisée : SearchX ne cherche jamais de contenu impliquant des mineurs.";
 
 export async function searchSource(src, input, signal) {
-  // Hentai mode steers every source towards hentai; drawn content always gets the strict rules.
-  const hentai = Boolean(state.settings.hentai);
-  const drawn = hentai || src === 'rule34';
+  // Drawn content (hentai mode, hentai sites) and X get the strict minor-safety rules.
+  const hentai = state.settings.mode === 'hentai';
+  const drawn = hentai || isStrictSource(src);
   if (!isQueryAllowed(input.q, { drawn })) throw new Error(REFUSED_MESSAGE);
-  const params = { ...input, q: sourceQuery(src, input.q, hentai), scope: hentai && src === 'reddit' ? 'hentai' : '' };
+  // In hentai mode RedGIFs keeps to its Hentai tag (and Reddit to the hentai subreddits).
+  const params = { ...input, q: String(input.q || '').trim(), scope: hentai && (src === 'redgifs' || src === 'reddit') ? 'hentai' : '' };
 
   let directError = null;
   const fn = DIRECT[src];
@@ -261,6 +266,18 @@ export async function searchSource(src, input, signal) {
     if (directError && !signal?.aborted) e.phone = src === 'reddit' ? directError.message : (directError.skipped ? directError.message : phoneReason(directError));
     throw e;
   }
+}
+
+const xVideos = new Map();
+
+/** Direct file of an X video (read from the post page by the server, then cached). */
+export async function xVideoUrl(item, signal) {
+  if (xVideos.has(item.id)) return xVideos.get(item.id);
+  const p = new URLSearchParams({ user: item.user || String(item.by?.[0] || '').replace(/^@/, ''), id: item.tweet || '' });
+  const body = await getJSON(`api/xvideo?${p}`, signal);
+  const v = { url: body.url, hls: Boolean(body.hls) };
+  xVideos.set(item.id, v);
+  return v;
 }
 
 export async function suggestTags(q, signal) {

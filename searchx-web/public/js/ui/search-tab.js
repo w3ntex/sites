@@ -1,33 +1,49 @@
 import { html, useState, useEffect, useRef, useCallback } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
-import { Spinner, cx, EmptyState } from './common.js';
+import { Spinner, cx, EmptyState, Thumb } from './common.js';
 import { Grid, SkeletonGrid, Strip } from './grid.js';
-import { state, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
-import { SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, SOURCE_ORDER, LAYOUTS, HENTAI_CATEGORIES, siteSearchUrl } from '../config.js';
+import { state, notify, emptySearch, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
+import {
+  SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, LAYOUTS, MODES, HENTAI_CATEGORIES, PORN_CATEGORIES,
+  siteSearchUrl, modeOf, modeSources
+} from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
-  toggleVisibleSource, showAllSources, clearCreators, clearRecent, isAnySourceLoading
+  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch
 } from '../search.js';
-import { suggestTags } from '../api.js';
+import { suggestTags, REFUSED_MESSAGE } from '../api.js';
 import { haptic } from '../lib/haptics.js';
 import { compact } from '../lib/format.js';
+import { applyTheme } from '../lib/theme.js';
 import { openViewer } from './viewer.js';
 import { Petals, isNeon } from './theme.js';
 
 const label = (opts, v) => (opts.find(o => o[0] === v) || [, ''])[1];
 const LAYOUT_ICON = { grid2: 'layers', grid3: 'grip', list: 'list' };
 
+export function switchMode(mode) {
+  if (modeOf(state.settings) === mode) return;
+  haptic();
+  updateSettings({ mode });
+  applyTheme(mode);
+  // Same words in the other mode's sites; an @X account only makes sense in porn mode.
+  const q = state.search.query;
+  if (q && !state.search.notice && !/^@\w+$/.test(q)) rerunSearch();
+  else { state.search = emptySearch(); notify(); }
+}
+
 function SearchField({ focused, setFocused }) {
   const [text, setText] = useState(state.search.query);
   const [tags, setTags] = useState([]);
   const input = useRef(null);
+  const hentai = modeOf(state.settings) === 'hentai';
 
   useEffect(() => { setText(state.search.query); }, [state.search.query]);
 
   // Rule34 tag suggestions, debounced (like the site's search box).
   useEffect(() => {
     const q = text.trim();
-    if (!focused || q.length < 2 || !state.filters.sources.includes('rule34')) { setTags([]); return; }
+    if (!focused || q.length < 2 || !hentai || !activeSources().includes('rule34') || q.startsWith('@')) { setTags([]); return; }
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       const list = await suggestTags(q.split(/[\s,]+/).pop() || q, ctrl.signal);
@@ -48,14 +64,16 @@ function SearchField({ focused, setFocused }) {
 
   const q = text.trim().toLowerCase();
   const recent = state.recent.filter(r => !q || r.toLowerCase().includes(q)).slice(0, q ? 4 : 8);
-  const pool = state.settings.hentai ? [...new Set([...HENTAI_CATEGORIES.map(c => c.q), ...POPULAR])] : POPULAR;
-  const popular = q ? pool.filter(p => p.startsWith(q) && !recent.some(r => r.toLowerCase() === p)).slice(0, 4) : [];
-  const showPanel = focused && (recent.length || popular.length || tags.length);
+  const pool = hentai ? HENTAI_CATEGORIES.map(c => c.q) : [...PORN_CATEGORIES.map(c => c.q), ...POPULAR];
+  const popular = q ? [...new Set(pool)].filter(p => p.startsWith(q) && !recent.some(r => r.toLowerCase() === p)).slice(0, 4) : [];
+  const follows = !hentai && q.startsWith('@')
+    ? state.xFollows.filter(f => `@${f.user.toLowerCase()}`.startsWith(q)).slice(0, 5) : [];
+  const showPanel = focused && (recent.length || popular.length || tags.length || follows.length);
 
   return html`<div class="search-wrap">
     <form class=${cx('search-field', focused && 'focused')} onSubmit=${e => { e.preventDefault(); submit(); }} role="search">
       <${Icon} name="search" size=${18} />
-      <input ref=${input} type="search" value=${text} placeholder=${state.settings.hentai ? 'Rechercher du hentai' : 'Rechercher partout'}
+      <input ref=${input} type="search" value=${text} placeholder=${hentai ? 'Rechercher du hentai' : 'Rechercher, ou @compte X'}
         autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
         onInput=${e => setText(e.currentTarget.value)}
         onFocus=${() => setFocused(true)}
@@ -66,6 +84,8 @@ function SearchField({ focused, setFocused }) {
     ${focused && html`<button type="button" class="cancel-btn" onPointerDown=${e => e.preventDefault()}
       onClick=${() => { setText(state.search.query); input.current?.blur(); setFocused(false); }}>Annuler</button>`}
     ${showPanel ? html`<div class="suggest" onPointerDown=${e => e.preventDefault()}>
+      ${follows.map(f => html`<button type="button" class="sug" key=${`f-${f.user}`} onClick=${() => submit(`@${f.user}`)}>
+        <${Icon} name="at" size=${16} /><span>@${f.user}</span><em>Compte suivi</em></button>`)}
       ${recent.map(r => html`<button type="button" class="sug" key=${`r-${r}`} onClick=${() => submit(r)}>
         <${Icon} name="clock" size=${16} /><span>${r}</span></button>`)}
       ${popular.map(p => html`<button type="button" class="sug" key=${`p-${p}`} onClick=${() => submit(p)}>
@@ -85,31 +105,29 @@ function TypePills() {
       ${MEDIA_OPTIONS.map(([v, l]) => html`<button type="button" key=${v} role="tab" aria-selected=${f.media === v ? 'true' : 'false'}
         class=${cx('type-pill', f.media === v && 'on')} onClick=${() => { if (f.media !== v) { haptic(); setFilters({ media: v }); } }}>${l}</button>`)}
     </div>
-    ${S.creators.length ? html`<button type="button" class=${cx('chip small', S.selectedCreators.length && 'active')}
+    ${S.creators.length > 1 ? html`<button type="button" class=${cx('chip small', S.selectedCreators.length && 'active')}
       onClick=${() => { haptic(); openSheet('creators'); }}>
       <${Icon} name="users" size=${13} /><span>${S.selectedCreators.length || S.creators.length}</span>
     </button>` : null}
   </div>`;
 }
 
-function SourceChips() {
+/** One tab per site: results are shown one site at a time, never mixed. */
+function SourceTabs() {
   const S = state.search;
   const srcs = activeSources().filter(s => S.per[s]);
   if (!srcs.length) return null;
-  return html`<div class="chips scroll-x status">
-    ${S.visibleSources.length ? html`<button type="button" class="chip small" onClick=${() => { haptic(); showAllSources(); }}>
-      <${Icon} name="x" size=${12} stroke=${3} /><span>Toutes</span></button>` : null}
+  return html`<div class="stabs" role="tablist" aria-label="Sites">
     ${srcs.map(src => {
       const p = S.per[src];
-      const on = S.visibleSources.includes(src);
-      const dim = S.visibleSources.length && !on;
-      return html`<button type="button" key=${src} class=${cx('chip small src', on && 'selected', dim && 'dim', p.state === 'error' && 'err')}
-        style=${`--c:${SOURCES[src].color}`}
-        onClick=${() => { haptic(); if (p.state === 'error') openSheet('sourceError', { src }); else toggleVisibleSource(src); }}>
-        <i class="dotc"></i><span>${SOURCES[src].name}</span>
+      const on = S.tab === src;
+      return html`<button type="button" key=${src} role="tab" aria-selected=${on ? 'true' : 'false'}
+        class=${cx('stab', on && 'on', p.state === 'error' && 'err', p.state === 'done' && !p.items.length && 'empty')}
+        style=${`--c:${SOURCES[src].color}`} onClick=${() => { haptic(); setTab(src); }}>
+        <span>${SOURCES[src].name}</span>
         ${p.state === 'loading' ? html`<${Spinner} size=${11} />`
           : p.state === 'error' ? html`<${Icon} name="warn" size=${13} class="warn" />`
-          : html`<em>${p.items.length}</em>`}
+          : html`<em>${p.items.length}${p.more ? '+' : ''}</em>`}
       </button>`;
     })}
   </div>`;
@@ -118,22 +136,18 @@ function SourceChips() {
 function ResultsToolbar() {
   const S = state.search;
   const f = state.filters;
+  const per = S.per[S.tab];
   const cycleLayout = () => {
     const i = LAYOUTS.findIndex(l => l[0] === state.settings.layout);
     haptic();
     updateSettings({ layout: LAYOUTS[(i + 1) % LAYOUTS.length][0] });
   };
-  const tags = activeSources().map(s => S.per[s]?.tags).find(Boolean);
+  const tags = per?.tags;
   const showTags = tags && tags.length && tags.join(' ') !== S.query.toLowerCase().replace(/\s+/g, '_');
-  const failed = activeSources().filter(s => S.per[s]?.state === 'error');
-  return html`${failed.length ? html`<div class="external-row">
-    <span>Pas dispo ici, ouvre la recherche sur :</span>
-    ${failed.map(src => html`<a key=${src} class="chip small ghost" href=${siteSearchUrl(src, S.query, { hentai: state.settings.hentai })} target="_blank" rel="noopener noreferrer"
-      onClick=${() => haptic()}><span>${SOURCES[src].name}</span><${Icon} name="external" size=${11} /></a>`)}
-  </div>` : null}
-  <div class="results-bar">
-    <span class="rb-count">${S.results.length ? `${S.results.length} résultat${S.results.length > 1 ? 's' : ''}` : ''}
-      ${showTags ? html`<small>Rule34 : ${tags.join(', ')}</small>` : null}</span>
+  if (!per || per.state === 'error' || (!S.results.length && per.state !== 'done')) return null;
+  return html`<div class="results-bar">
+    <span class="rb-count">${S.results.length ? `${S.results.length} résultat${S.results.length > 1 ? 's' : ''} · ${SOURCES[S.tab].name}` : ''}
+      ${showTags ? html`<small>Tags : ${tags.join(', ').replace(/_/g, ' ')}</small>` : null}</span>
     <button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier par', key: 'sort', options: SORT_OPTIONS, value: f.sort, onPick: v => setFilters({ sort: v }) }); }}>
       <${Icon} name="sort" size=${14} />${label(SORT_OPTIONS, f.sort)}
     </button>
@@ -141,6 +155,94 @@ function ResultsToolbar() {
       <${Icon} name=${LAYOUT_ICON[state.settings.layout] || 'layers'} size=${16} />
     </button>
   </div>`;
+}
+
+/** X account header (for "@name" searches). */
+function XProfile({ profile, query }) {
+  const user = profile?.user || query.replace(/^@/, '');
+  const following = isFollowing(user);
+  useEffect(() => { updateFollow(profile); }, [profile?.user, profile?.avatar]);
+  return html`<div class="xprofile">
+    <span class="xavatar">${profile?.avatar ? html`<${Thumb} src=${profile.avatar} />` : html`<${Icon} name="user" size=${22} />`}</span>
+    <span class="xprofile-text"><strong>${profile?.name || user}</strong><small>@${user} · photos et vidéos récentes</small></span>
+    <button type="button" class=${cx('btn small', following && 'ghost')} onClick=${() => {
+      haptic();
+      toggleFollow({ user, name: profile?.name, avatar: profile?.avatar });
+    }}><${Icon} name=${following ? 'userCheck' : 'userPlus'} size=${15} />${following ? 'Suivi' : 'Suivre'}</button>
+  </div>`;
+}
+
+/** Shown on the X tab for word searches: X hides most adult posts there. */
+function XHint() {
+  const follows = state.xFollows.slice(0, 12);
+  return html`<div class="xhint">
+    <p><${Icon} name="info" size=${15} /> Sur X, la recherche par mots montre peu de contenu adulte (X le cache sans compte).
+      Cherche plutôt un compte : <b>@nom</b>.</p>
+    ${follows.length ? html`<div class="chips scroll-x">${follows.map(f => html`<button type="button" key=${f.user} class="chip small"
+      onClick=${() => { haptic(); runSearch(`@${f.user}`); }}><${Icon} name="at" size=${12} />${f.user}</button>`)}</div>` : null}
+  </div>`;
+}
+
+function TabError({ src, per }) {
+  const S = state.search;
+  const [open, setOpen] = useState(false);
+  const mode = modeOf(state.settings);
+  return html`<div class="tab-error">
+    <div class="empty-icon"><${Icon} name="warn" size=${30} stroke=${1.7} /></div>
+    <h3>${SOURCES[src].name} ne répond pas</h3>
+    <p>${per.error}</p>
+    ${src === 'rule34' && /clé|API/i.test(per.error || '') && html`<p class="muted">Ajoute ta clé dans Réglages → Sources → Identifiants Rule34.</p>`}
+    <div class="sheet-buttons col">
+      <button type="button" class="btn" onClick=${() => { haptic(); retrySource(src); }}><${Icon} name="refresh" size=${16} /> Réessayer</button>
+      <a class="btn ghost" href=${siteSearchUrl(src, S.query, { mode })} target="_blank" rel="noopener noreferrer" onClick=${() => haptic()}>
+        <${Icon} name="external" size=${16} /> Ouvrir « ${S.query} » sur ${SOURCES[src].name}</a>
+    </div>
+    ${(per.debug || per.phone) ? html`<button type="button" class="text-btn muted-btn" onClick=${() => setOpen(!open)}>${open ? 'Masquer' : 'Voir'} le détail</button>` : null}
+    ${open && html`<div class="debug-box">
+      ${per.phone && html`<p><b>Depuis le téléphone :</b> ${per.phone}</p>`}
+      ${per.debug && html`<p><b>Détail serveur :</b> ${per.debug}</p>`}
+    </div>`}
+    <button type="button" class="text-btn muted-btn" onClick=${() => { haptic(); disableSources([src]); }}>Ne plus utiliser ${SOURCES[src].name}</button>
+  </div>`;
+}
+
+function Results() {
+  const S = state.search;
+  const onOpen = useCallback(item => { haptic(); openViewer(state.search.results, item.id); }, []);
+  const onLong = useCallback(item => openSheet('item', { item }), []);
+  const onEnd = useCallback(() => loadMore(), []);
+
+  if (S.notice) return html`<${EmptyState} icon="shield" title="Recherche refusée" text=${S.notice} />`;
+  const src = S.tab;
+  const per = S.per[src];
+  if (!per) return html`<${EmptyState} icon="sliders" title="Aucune source" text="Active au moins une source dans Réglages." />`;
+  const isX = src === 'x';
+  const account = isX && /^@\w{1,15}$/.test(S.query);
+  const head = isX ? (account ? html`<${XProfile} profile=${per.profile} query=${S.query} />` : html`<${XHint} />`) : null;
+
+  if (per.state === 'error' && per.error === REFUSED_MESSAGE) {
+    return html`${head}<${EmptyState} icon="shield" title=${`Refusé sur ${SOURCES[src].name}`}
+      text=${`${SOURCES[src].name} n'est pas vérifié comme les sites pro : les mots qui peuvent viser des mineurs y sont refusés. Les autres onglets restent disponibles.`} />`;
+  }
+  if (per.state === 'error') return html`${head}<${TabError} src=${src} per=${per} />`;
+  if (!S.results.length && per.state === 'loading') return html`${head}<${SkeletonGrid} count=${8} />`;
+  if (!S.results.length) {
+    const others = activeSources().filter(s => s !== src && S.per[s]?.items.length);
+    const filtered = per.items.length > 0;
+    return html`${head}<${EmptyState} icon="search" title=${filtered ? 'Rien avec ces filtres' : `Rien sur ${SOURCES[src].name}`}
+      kaomoji="(´・ω・\`)"
+      text=${filtered ? 'Élargis la durée ou la qualité.' : `Aucun résultat pour « ${S.query} » sur ${SOURCES[src].name}.`}>
+      ${filtered ? html`<button type="button" class="btn ghost small" onClick=${() => { resetFilters(); clearCreators(); }}>Réinitialiser les filtres</button>` : null}
+      ${others.length ? html`<div class="other-tabs">${others.map(s => html`<button type="button" key=${s} class="chip"
+        style=${`--c:${SOURCES[s].color}`} onClick=${() => { haptic(); setTab(s); }}><i class="dotc"></i>${SOURCES[s].name} <em>${S.per[s].items.length}</em></button>`)}</div>` : null}
+    <//>`;
+  }
+  const footer = S.loadingMore
+    ? html`<div class="list-end"><${Spinner} /></div>`
+    : canLoadMore()
+      ? html`<div class="list-end"><button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
+      : html`<div class="list-end muted">Fin des résultats ${SOURCES[src].name}</div>`;
+  return html`${head}<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${footer} onEndReached=${onEnd} />`;
 }
 
 function usePullToRefresh(onRefresh, enabled) {
@@ -220,72 +322,80 @@ function InstallCard() {
   </div>`;
 }
 
-function Categories() {
+function ModeSwitch() {
+  const mode = modeOf(state.settings);
+  return html`<div class="mode-switch" role="tablist" aria-label="Mode">
+    ${Object.entries(MODES).map(([k, m]) => html`<button type="button" key=${k} role="tab" aria-selected=${mode === k ? 'true' : 'false'}
+      class=${cx('mode-btn', `m-${k}`, mode === k && 'on')} onClick=${() => switchMode(k)}>
+      <${Icon} name=${m.icon} size=${16} /><span>${m.label}</span></button>`)}
+  </div>`;
+}
+
+function XFollowsStrip() {
+  const follows = state.xFollows;
+  return html`<section class="strip">
+    <header><h3>Comptes X</h3>${follows.length ? html`<button type="button" class="text-btn"
+      onClick=${() => { haptic(); openSheet('xaccounts'); }}>Gérer</button>` : null}</header>
+    ${follows.length ? html`<div class="xfollows">
+      ${follows.map(f => html`<button type="button" key=${f.user} class="xfollow" onClick=${() => { haptic(); runSearch(`@${f.user}`); }}>
+        <span class="xavatar">${f.avatar ? html`<${Thumb} src=${f.avatar} />` : html`<${Icon} name="user" size=${22} />`}</span>
+        <span>${f.name || f.user}</span>
+      </button>`)}
+      <button type="button" class="xfollow add" onClick=${() => { haptic(); openSheet('xaccounts'); }}>
+        <span class="xavatar"><${Icon} name="plus" size=${22} /></span><span>Ajouter</span></button>
+    </div>`
+    : html`<button type="button" class="xempty" onClick=${() => { haptic(); openSheet('xaccounts'); }}>
+        <${Icon} name="at" size=${22} />
+        <span><b>Suis des comptes X</b><small>Leurs photos et vidéos en un geste. Tu peux aussi taper @nom dans la recherche.</small></span>
+        <${Icon} name="chevronRight" size=${18} />
+      </button>`}
+  </section>`;
+}
+
+function Categories({ hentai }) {
+  const list = hentai ? HENTAI_CATEGORIES : PORN_CATEGORIES;
   return html`<section class="chip-section">
-    <header><h3 data-jp="ジャンル">Catégories</h3></header>
-    <div class="cat-grid">${HENTAI_CATEGORIES.map(c => html`<button type="button" key=${c.q} class="cat"
-      onClick=${() => { haptic(); runSearch(c.q); }}><b lang="ja">${c.jp}</b><span>${c.fr}</span></button>`)}</div>
+    <header><h3 data-jp=${hentai ? 'ジャンル' : null}>Catégories</h3></header>
+    <div class="cat-grid">${list.map(c => html`<button type="button" key=${c.q} class="cat"
+      onClick=${() => { haptic(); runSearch(c.q); }}>${hentai
+        ? html`<b lang="ja">${c.jp}</b><span>${c.fr}</span>`
+        : html`<b>${c.fr}</b><span>${c.q}</span>`}</button>`)}</div>
   </section>`;
 }
 
 function Welcome() {
+  const mode = modeOf(state.settings);
+  const hentai = mode === 'hentai';
+  const mine = new Set(modeSources(mode));
   const seen = new Set();
-  const resume = state.history.map(h => h.item).filter(it => !seen.has(it.id) && seen.add(it.id)).slice(0, 14);
-  const favs = state.favorites.slice(0, 14);
-  const hentai = state.settings.hentai;
-  const neon = isNeon();
+  // Each mode keeps to its own sites, here too.
+  const resume = state.history.map(h => h.item).filter(it => mine.has(it.src) && !seen.has(it.id) && seen.add(it.id)).slice(0, 14);
+  const favs = state.favorites.filter(it => mine.has(it.src)).slice(0, 14);
+  const names = activeSources().map(s => SOURCES[s].name);
   return html`<div class="welcome">
     <${InstallCard} />
     <div class="hero">
-      ${neon && html`<${Petals} count=${7} />`}
-      ${neon && html`<div class="hero-kicker" lang="ja">変態サーチ<span>18禁</span></div>`}
-      <h1>${hentai ? html`Tout le hentai,<br /><span>en une recherche.</span>` : html`Une recherche,<br /><span>toutes les sources.</span>`}</h1>
-      <p>${SOURCE_ORDER.filter(s => state.filters.sources.includes(s)).map(s => SOURCES[s].name).join(' · ') || 'Aucune source activée'}</p>
+      ${isNeon() && html`<${Petals} count=${7} />`}
+      ${hentai
+        ? html`<div class="hero-kicker" lang="ja">変態サーチ<span>18禁</span></div>
+          <h1>Tout le hentai,<br /><span>en une recherche.</span></h1>`
+        : html`<div class="hero-kicker">SearchX<span>18+</span></div>
+          <h1>Le meilleur du X,<br /><span>sans le bazar.</span></h1>`}
+      <p>${names.join(' · ') || 'Aucune source activée'}</p>
+      <${ModeSwitch} />
     </div>
-    <${Strip} title="Reprendre" jp="続きを見る" items=${resume} onOpen=${it => { haptic(); openViewer(resume, it.id); }}
+    ${!hentai && activeSources().includes('x') ? html`<${XFollowsStrip} />` : null}
+    <${Strip} title="Reprendre" jp=${hentai ? '続きを見る' : null} items=${resume} onOpen=${it => { haptic(); openViewer(resume, it.id); }}
       action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); switchTab('history'); }}>Historique</button>`} />
-    <${Strip} title="Favoris" jp="お気に入り" items=${favs} onOpen=${it => { haptic(); openViewer(favs, it.id); }}
+    <${Strip} title="Favoris" jp=${hentai ? 'お気に入り' : null} items=${favs} onOpen=${it => { haptic(); openViewer(favs, it.id); }}
       action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); state.libSegment = 'favorites'; switchTab('library'); }}>Tout voir</button>`} />
     ${state.recent.length ? html`<section class="chip-section">
-      <header><h3 data-jp="最近の検索">Recherches récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
+      <header><h3 data-jp=${hentai ? '最近の検索' : null}>Recherches récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
       <div class="chips wrap">${state.recent.slice(0, 14).map(r => html`<button type="button" key=${r} class="chip pillish"
         onClick=${() => { haptic(); runSearch(r); }}>${r}</button>`)}</div>
     </section>` : null}
-    ${hentai ? html`<${Categories} />` : html`<section class="chip-section">
-      <header><h3 data-jp="人気">Populaires</h3></header>
-      <div class="chips wrap">${POPULAR.map(p => html`<button type="button" key=${p} class="chip pillish"
-        onClick=${() => { haptic(); runSearch(p); }}>${p}</button>`)}</div>
-    </section>`}
+    <${Categories} hentai=${hentai} />
   </div>`;
-}
-
-function Results() {
-  const S = state.search;
-  const onOpen = useCallback(item => { haptic(); openViewer(state.search.results, item.id); }, []);
-  const onLong = useCallback(item => openSheet('item', { item }), []);
-  const onEnd = useCallback(() => loadMore(), []);
-  const loadingAny = isAnySourceLoading();
-
-  if (S.notice) return html`<${EmptyState} icon="shield" title="Recherche refusée" text=${S.notice} />`;
-  if (!S.results.length && (S.loading || loadingAny)) return html`<${SkeletonGrid} count=${8} />`;
-  if (!S.results.length) {
-    const act = activeSources().filter(s => S.per[s]);
-    const errors = act.filter(s => S.per[s]?.state === 'error');
-    const allFailed = errors.length && errors.length === act.length;
-    return html`<${EmptyState} icon=${allFailed ? 'warn' : 'search'}
-      title=${allFailed ? 'Les sources ne répondent pas' : 'Aucun résultat'} kaomoji=${allFailed ? '(╥﹏╥)' : '(´・ω・`)'}
-      text=${allFailed ? 'Touche une source marquée ⚠️ pour voir pourquoi.'
-        : (S.selectedCreators.length || S.visibleSources.length) ? 'Rien pour cette sélection. Élargis les filtres.'
-        : `Rien trouvé pour « ${S.query} ». Essaie un autre mot ou d'autres filtres.`}>
-      <button type="button" class="btn ghost small" onClick=${() => { resetFilters(); clearCreators(); showAllSources(); }}>Réinitialiser les filtres</button>
-    <//>`;
-  }
-  const footer = S.loadingMore || (loadingAny && !S.loading)
-    ? html`<div class="list-end"><${Spinner} /></div>`
-    : canLoadMore()
-      ? html`<div class="list-end"><button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
-      : html`<div class="list-end muted">Fin des résultats</div>`;
-  return html`<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${footer} onEndReached=${onEnd} />`;
 }
 
 function ScrollTop() {
@@ -319,7 +429,7 @@ export function SearchTab() {
           onClick=${() => { haptic(); lockNow(); }}><${Icon} name="lock" size=${18} /></button>`}
       </div>
       <${TypePills} />
-      ${S.query && html`<${SourceChips} />`}
+      ${S.query && !S.notice && html`<${SourceTabs} />`}
     </header>
     <div class="ptr" style=${`height:${pull}px`}>
       ${(pull > 0 || busy) && html`<span class=${cx('ptr-icon', (pull > 70 || busy) && 'ready', busy && 'spin')}><${Icon} name="refresh" size=${20} /></span>`}

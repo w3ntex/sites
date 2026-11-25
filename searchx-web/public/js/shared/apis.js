@@ -8,9 +8,13 @@ import { parseRedditListing } from './reddit.js';
 
 export const REDGIFS_TOKEN_URL = 'https://api.redgifs.com/v2/auth/temporary';
 
-export function redgifsSearchUrl({ q, page = 1, sort = 'relevance', media = 'all' }) {
-  const order = { relevance: 'trending', views: 'top', newest: 'latest', rating: 'best' }[sort] || 'trending';
-  const p = new URLSearchParams({ search_text: q, order, count: '40', page: String(page) });
+// RedGIFs ignores the old `search_text` parameter (it answers with the trending feed whatever the
+// words): the search is `query`. Orders accepted: top, top7, top28, latest, score, trending.
+export const REDGIFS_ORDERS = { relevance: 'score', views: 'top', rating: 'top28', newest: 'latest' };
+
+export function redgifsSearchUrl({ q, page = 1, sort = 'relevance', media = 'all', scope = '' }) {
+  const p = new URLSearchParams({ query: q, order: REDGIFS_ORDERS[sort] || 'score', count: '40', page: String(page) });
+  if (scope === 'hentai') p.set('tags', 'Hentai');
   if (media === 'image') p.set('type', 'i');
   else if (media === 'gif' || media === 'video') p.set('type', 'g');
   return `https://api.redgifs.com/v2/gifs/search?${p}`;
@@ -115,4 +119,115 @@ export function parsePullPush(json) {
   let last = null;
   for (let i = posts.length - 1; i >= 0 && last == null; i--) last = num(posts[i]?.created_utc);
   return { items, cursor: last ? `pp:${Math.floor(last)}` : '', more: posts.length >= 100 };
+}
+
+// ---- Danbooru (anime art; the API allows calls from any web page) ------------------------------
+// Anonymous searches are limited to 2 tags, metatags included: one tag + rating:e, or two tags and
+// the rating is checked afterwards.
+
+export const DANBOORU = 'https://danbooru.donmai.us';
+
+export function danbooruAutocompleteUrl(term) {
+  const p = new URLSearchParams({ 'search[query]': term, 'search[type]': 'tag_query', limit: '8' });
+  return `${DANBOORU}/autocomplete.json?${p}`;
+}
+
+/** Autocomplete answer → [{ tag, count }] (most used first). */
+export function parseDanbooruAutocomplete(list) {
+  return (Array.isArray(list) ? list : [])
+    .map(x => ({ tag: String(x?.value || x?.name || '').toLowerCase(), count: num(x?.post_count) || 0 }))
+    .filter(x => x.tag && !x.tag.includes(':'))
+    .sort((a, b) => b.count - a.count);
+}
+
+export function danbooruPostsUrl({ tags, page = 1 }) {
+  const t = tags.slice(0, 2);
+  if (t.length < 2) t.push('rating:e');
+  const p = new URLSearchParams({ tags: t.join(' '), limit: '100', page: String(page) });
+  return `${DANBOORU}/posts.json?${p}`;
+}
+
+function variant(p, type) {
+  return absUrl((p?.media_asset?.variants || []).find(v => v.type === type)?.url);
+}
+
+export function parseDanbooru(posts) {
+  const out = [];
+  for (const p of Array.isArray(posts) ? posts : []) {
+    if (!p?.id || p.rating !== 'e' || p.is_deleted || p.is_banned) continue;
+    const ext = String(p.file_ext || '').toLowerCase();
+    if (!['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm'].includes(ext)) continue; // ugoira zip, swf
+    const file = absUrl(p.file_url);
+    const thumb = variant(p, '720x720') || variant(p, '360x360') || absUrl(p.preview_file_url);
+    if (!file || !thumb) continue;
+    const type = ext === 'mp4' || ext === 'webm' ? 'video' : ext === 'gif' ? 'gif' : 'image';
+    const tags = String(p.tag_string || '').split(/\s+/).filter(Boolean);
+    const chars = String(p.tag_string_character || '').split(/\s+/).filter(Boolean).map(t => t.replace(/_/g, ' '));
+    const artists = String(p.tag_string_artist || '').split(/\s+/).filter(Boolean).map(t => t.replace(/_/g, ' '));
+    out.push({
+      id: `danbooru:${p.id}`,
+      src: 'danbooru',
+      title: (chars.length ? chars.slice(0, 3).join(', ') : String(p.tag_string_general || '').split(/\s+/).slice(0, 6).join(', ').replace(/_/g, ' ')) || `Danbooru #${p.id}`,
+      dur: null,
+      thumb,
+      thumb2: absUrl(p.preview_file_url),
+      views: null,
+      rating: null,
+      likes: num(p.score),
+      url: `${DANBOORU}/posts/${p.id}`,
+      type,
+      media: type === 'image' ? (absUrl(p.large_file_url) || file) : file,
+      full: file,
+      embed: null,
+      h: num(p.image_height),
+      w: num(p.image_width),
+      date: Number.isFinite(Date.parse(p.created_at)) ? Math.round(Date.parse(p.created_at) / 1000) : null,
+      tags,
+      by: artists
+    });
+  }
+  return out;
+}
+
+// ---- Yande.re (high-resolution scans; Moebooru API) ---------------------------------------------
+
+export function yandereUrl({ tags, page = 1, sort = 'relevance', negative = [] }) {
+  const t = [...tags, 'rating:e', ...negative.map(n => `-${n}`)];
+  if (sort === 'views' || sort === 'rating') t.push('order:score');
+  const p = new URLSearchParams({ tags: t.join(' '), limit: '40', page: String(page) });
+  return `https://yande.re/post.json?${p}`;
+}
+
+export function parseYandere(posts) {
+  const out = [];
+  for (const p of Array.isArray(posts) ? posts : []) {
+    if (!p?.id || String(p.rating || '') !== 'e') continue;
+    const file = absUrl(p.file_url);
+    const sample = absUrl(p.sample_url) || absUrl(p.jpeg_url);
+    const thumb = absUrl(p.preview_url) || sample;
+    if (!file || !thumb) continue;
+    const tags = String(p.tags || '').split(/\s+/).filter(Boolean);
+    out.push({
+      id: `yandere:${p.id}`,
+      src: 'yandere',
+      title: tags.slice(0, 8).map(t => t.replace(/_/g, ' ')).join(', ') || `yande.re #${p.id}`,
+      dur: null,
+      thumb: sample && (num(p.sample_width) || 0) <= 1600 ? sample : thumb,
+      thumb2: thumb,
+      views: null,
+      rating: null,
+      likes: num(p.score),
+      url: `https://yande.re/post/show/${p.id}`,
+      type: String(p.file_ext || '').toLowerCase() === 'gif' ? 'gif' : 'image',
+      media: sample || file,
+      full: file,
+      embed: null,
+      h: num(p.height),
+      w: num(p.width),
+      date: num(p.created_at),
+      tags,
+      by: p.author ? [String(p.author)] : []
+    });
+  }
+  return out;
 }

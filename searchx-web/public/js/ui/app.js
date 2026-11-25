@@ -27,7 +27,7 @@ function AgeGate() {
     <div class="age-inner">
       ${neon
         ? html`<div class="age-stamp" lang="ja"><b>18</b><span>禁</span></div><p class="age-kicker" lang="ja">成人向け</p>`
-        : html`<div class="age-badge">18+</div>`}
+        : html`<div class="age-stamp porn"><b>18</b><span>+</span></div><p class="age-kicker">Adultes uniquement</p>`}
       <h1>Réservé aux adultes</h1>
       <p>SearchX recherche sur des sites qui hébergent du contenu sexuellement explicite. Tu dois avoir au moins 18 ans
         (ou l'âge de la majorité dans ton pays) pour continuer.</p>

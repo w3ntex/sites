@@ -2,10 +2,26 @@
 
 SearchX as a web app you install from Safari to the iPhone home screen. You don't need a computer, it never expires (unlike sideloading), and it's free.
 
-* **App**: `public/`, built with Preact + htm and no build step. French UI. Two themes: *Hentai néon* (default) and *Sobre* (OLED black, red accent).
+* **App**: `public/`, built with Preact + htm and no build step. French UI. Two modes, each with its own sites and theme: *Porno* (black, crimson to amber, Bebas Neue) and *Hentai* (neon pink and violet, Mochiy Pop One).
 * **API**: `src/worker.js`, a Cloudflare Worker that searches the sites server-side. Browsers can't call those sites directly because of CORS. The Worker also serves the app.
 
 ## Features
+
+**v2.5 (two modes, one tab per site):**
+* **Mode switch** (home screen, and Réglages → Mode). Each mode has its own sites and look. Results are shown one site at a time in tabs, in the site's own order, and are never mixed.
+* **Porno mode: RedGIFs and X.**
+  * **RedGIFs.** Searches now send the words as `query`. The API ignores the old `search_text`, which is why results used to be the trending feed whatever was typed. Default order is `score`.
+  * RedGIFs search only works through the server, because its CORS only allows redgifs.com. RedGIFs temporary tokens are bound to the IP address and User-Agent that requested them. The Worker therefore fetches the token and searches within the same request, with the same User-Agent, and fetches a new token on `WrongSender`.
+  * **X** goes through Nitter mirrors. `@name` shows that account's photos and videos. Video files are read from the post page via `/api/xvideo`, and pictures and videos load straight from X's CDN (pbs.twimg.com, video.twimg.com). Keyword search works but X hides most adult posts from logged-out readers. Followed accounts appear on the home screen.
+  * Eporner, xHamster, RedTube, xVideos and Reddit are still available but off by default.
+* **Hentai mode** uses dedicated hentai sites, one tab each:
+  * Hstream: HD and 4K episodes. Genres are searched as genres, and `school-girl` is always excluded. Episodes open on hstream.moe, which can't be embedded.
+  * Rule34Video: 3D and 2D animations, with an embedded player and preview clips.
+  * Rule34.
+  * Danbooru: called from the phone. Words go through Danbooru's autocomplete, and its 2-tag anonymous limit is respected.
+  * Yande.re.
+  * RedGIFs, limited to its Hentai tag.
+* **Strict minor-safety rules** for drawn content and for X: school-age terms, teen, daughter, classmate…
 
 **v2.4 (hentai):**
 * **Hentai néon theme** (Réglages → Apparence → Thème):

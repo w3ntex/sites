@@ -3,13 +3,13 @@ import { Icon } from './icons.js';
 import { Group, Row, Switch, Sheet, SourceBadge, Spinner, cx } from './common.js';
 import { PinSetupSheet } from './lock.js';
 import { state, notify, updateSettings, openSheet, closeSheet, toast, lockEnabled, lockNow } from '../state.js';
-import { SOURCES, SOURCE_ORDER, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, THEMES } from '../config.js';
-import { setFilters, clearRecent, disableSources, rerunSearch } from '../search.js';
+import { SOURCES, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, MODES, modeOf, modeSources } from '../config.js';
+import { clearRecent, disableSources, enableSource } from '../search.js';
+import { switchMode } from './search-tab.js';
 import { clearHistory, exportData, importData } from '../library.js';
 import { searchSource, health, resetDirect } from '../api.js';
 import { biometricsAvailable, registerBiometrics } from '../lib/lock.js';
 import { applyInstallIcon, isStandalone } from '../lib/install.js';
-import { applyTheme } from '../lib/theme.js';
 import { haptic } from '../lib/haptics.js';
 
 function parseR34(text) {
@@ -48,32 +48,37 @@ function Rule34Sheet() {
     </div>`}<//>`;
 }
 
+const TEST_QUERY = { porn: 'blonde', hentai: 'elf' };
+
 function TestSheet() {
+  const mode = modeOf(state.settings);
+  const LIST = modeSources(mode);
+  const q = TEST_QUERY[mode];
   const [run, setRun] = useState(0);
-  const [rows, setRows] = useState(() => Object.fromEntries(SOURCE_ORDER.map(s => [s, { state: 'loading' }])));
+  const [rows, setRows] = useState(() => Object.fromEntries(LIST.map(s => [s, { state: 'loading' }])));
   useEffect(() => {
     let alive = true;
-    setRows(Object.fromEntries(SOURCE_ORDER.map(s => [s, { state: 'loading' }])));
+    setRows(Object.fromEntries(LIST.map(s => [s, { state: 'loading' }])));
     resetDirect(); // really try the phone path again on every test
-    for (const src of SOURCE_ORDER) {
+    for (const src of LIST) {
       const t0 = performance.now();
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort('timeout'), 35000);
-      searchSource(src, { q: 'blonde', page: 1, sort: 'relevance', media: 'all', dur: 'any', hd: 'any', cursor: '', fresh: true }, ctrl.signal)
+      searchSource(src, { q, page: 1, sort: 'relevance', media: 'all', dur: 'any', hd: 'any', cursor: '', fresh: true }, ctrl.signal)
         .then(r => ({ state: r.items.length ? 'ok' : 'empty', count: r.items.length, ms: performance.now() - t0, via: r.via }))
         .catch(e => ({ state: 'error', error: ctrl.signal.reason === 'timeout' ? 'Pas de réponse en 35 s.' : e.message, debug: e.debug, phone: e.phone }))
         .then(res => { clearTimeout(timer); if (alive) setRows(r => ({ ...r, [src]: res })); });
     }
     return () => { alive = false; };
   }, [run]);
-  const failing = SOURCE_ORDER.filter(src => rows[src].state === 'error' || rows[src].state === 'empty');
-  const done = SOURCE_ORDER.every(src => rows[src].state !== 'loading');
+  const failing = LIST.filter(src => rows[src].state === 'error' || rows[src].state === 'empty');
+  const done = LIST.every(src => rows[src].state !== 'loading');
   const enabledFailing = failing.filter(src => state.filters.sources.includes(src));
   return html`<${Sheet} title="Test des sources" onClose=${closeSheet} tall
     actions=${html`<button type="button" class="text-btn" disabled=${!done} onClick=${() => { haptic(); setRun(n => n + 1); }}>Relancer</button>`}>
-    <p class="sheet-text">Recherche « blonde » sur chaque source. <b>Téléphone</b> = appel direct depuis ton iPhone, <b>serveur</b> = via Cloudflare.</p>
+    <p class="sheet-text">Recherche « ${q} » sur chaque site du mode ${MODES[mode].label.toLowerCase()}. <b>Téléphone</b> = appel direct depuis ton iPhone, <b>serveur</b> = via Cloudflare.</p>
     <div class="test-list">
-      ${SOURCE_ORDER.map(src => {
+      ${LIST.map(src => {
         const r = rows[src];
         return html`<div class="test-row" key=${src}>
           <${SourceBadge} src=${src} />
@@ -165,14 +170,6 @@ export function SettingsTab() {
     applyInstallIcon(key);
     toast(isStandalone() ? "Supprime l'icône actuelle puis ré-ajoute SearchX depuis Safari." : `Prêt : ajoute à l'écran d'accueil (« ${INSTALL_ICONS[key].name} »).`);
   };
-  const toggleSource = (src, on) => {
-    const sources = on ? [...state.filters.sources, src] : state.filters.sources.filter(x => x !== src);
-    setFilters({ sources: SOURCE_ORDER.filter(x => sources.includes(x)) });
-    const d = state.defaultFilters;
-    d.sources = on ? [...new Set([...d.sources, src])] : d.sources.filter(x => x !== src);
-    try { localStorage.setItem('sx.defaultFilters', JSON.stringify(d)); } catch { /* ignore */ }
-    notify();
-  };
   const onImport = async e => {
     const f = e.currentTarget.files?.[0];
     e.currentTarget.value = '';
@@ -190,6 +187,7 @@ export function SettingsTab() {
     setTimeout(() => location.reload(), 700);
   };
   const r34ok = s.r34key && s.r34user;
+  const mode = modeOf(s);
 
   return html`<div class="tab">
     <header class="topbar plain"><h1 class="page-title" data-jp="設定">Réglages</h1></header>
@@ -199,14 +197,19 @@ export function SettingsTab() {
         <div><strong>Installer l'app</strong><p>Safari → <span class="kbd"><${Icon} name="share" size=${13} /></span> → « Sur l'écran d'accueil ». Les réglages de l'app installée sont séparés de ceux de Safari.</p></div>
       </div>`}
 
-      <${Group} title="Apparence" footer="Le filtre anti-mineurs reste actif dans tous les modes, et il est plus strict pour le contenu dessiné (hentai, Rule34, 3D).">
-        <${Row} icon="sparkles" iconColor="#ff3d8b" title="Thème" chevron
-          right=${(THEMES.find(t => t[0] === s.theme) || THEMES[0])[1]}
-          onClick=${() => openSheet('options', { title: 'Thème', key: 'theme', options: THEMES, value: s.theme, onPick: v => { updateSettings({ theme: v }); applyTheme(v); } })} />
-        <${Row} icon="heart" iconColor="#c03af0" title="Mode hentai"
-          subtitle="Oriente toutes les sources vers le hentai : « hentai » ajouté aux recherches vidéo, subreddits hentai sur Reddit, Rule34 en premier."
-          right=${html`<${Switch} checked=${s.hentai} onChange=${v => { updateSettings({ hentai: v }); rerunSearch(); toast(v ? 'Mode hentai activé' : 'Mode hentai désactivé'); }} label="Mode hentai" />`} />
-      <//>
+      <div class="mode-card">
+        <p class="mode-card-title">Mode</p>
+        <div class="mode-pick">
+          ${Object.entries(MODES).map(([k, m]) => html`<button type="button" key=${k} class=${cx('mode-opt', `m-${k}`, mode === k && 'on')}
+            onClick=${() => { switchMode(k); toast(`Mode ${m.label.toLowerCase()}`); }}>
+            <span class="mode-opt-icon"><${Icon} name=${m.icon} size=${22} /></span>
+            <strong>${m.label}</strong><small>${m.sub}</small>
+            ${mode === k && html`<span class="mode-opt-check"><${Icon} name="check" size=${14} stroke=${3} /></span>`}
+          </button>`)}
+        </div>
+        <p class="mode-card-foot">Chaque mode a ses propres sites (affichés un par un, jamais mélangés) et son propre thème.
+          Le filtre anti-mineurs reste actif partout, plus strict pour le hentai et X.</p>
+      </div>
 
       <${Group} title="Sécurité" footer=${bioOK
           ? "Face ID est demandé à l'ouverture et à chaque retour dans l'app. Si Face ID échoue, iOS propose le code de ton iPhone."
@@ -240,13 +243,15 @@ export function SettingsTab() {
         </div>
       <//>
 
-      <${Group} title="Sources" footer="Les sources désactivées ne sont plus interrogées (et sont décochées dans les filtres par défaut).">
-        ${SOURCE_ORDER.map(src => html`<${Row} key=${src} title=${SOURCES[src].name} subtitle=${SOURCES[src].note}
+      <${Group} title=${`Sites du mode ${MODES[mode].label.toLowerCase()}`} footer="Chaque site a son onglet dans les résultats. Les sites désactivés ne sont plus interrogés.">
+        ${modeSources(mode).map(src => html`<${Row} key=${src} title=${SOURCES[src].name} subtitle=${SOURCES[src].note + (SOURCES[src].extra ? ' (optionnel)' : '')}
           lead=${html`<${SourceBadge} src=${src} />`}
-          right=${html`<${Switch} checked=${state.filters.sources.includes(src)} onChange=${on => toggleSource(src, on)} label=${SOURCES[src].name} />`} />`)}
-        <${Row} icon="key" iconColor=${r34ok ? '#46a758' : '#f76b15'} title="Identifiants Rule34" chevron
-          right=${r34ok ? `user ${s.r34user}` : 'À configurer'} onClick=${() => openSheet('custom', { render: () => html`<${Rule34Sheet} />` })} />
-        <${Row} icon="zap" iconColor="#ffb224" title="Tester toutes les sources" chevron onClick=${() => openSheet('custom', { render: () => html`<${TestSheet} />` })} />
+          right=${html`<${Switch} checked=${state.filters.sources.includes(src)} onChange=${on => enableSource(src, on)} label=${SOURCES[src].name} />`} />`)}
+        ${mode === 'porn' && html`<${Row} icon="at" iconColor="#1d9bf0" title="Comptes X suivis" chevron
+          right=${state.xFollows.length ? String(state.xFollows.length) : 'Aucun'} onClick=${() => openSheet('xaccounts')} />`}
+        ${mode === 'hentai' && html`<${Row} icon="key" iconColor=${r34ok ? '#46a758' : '#f76b15'} title="Identifiants Rule34" chevron
+          right=${r34ok ? `user ${s.r34user}` : 'À configurer'} onClick=${() => openSheet('custom', { render: () => html`<${Rule34Sheet} />` })} />`}
+        <${Row} icon="zap" iconColor="#ffb224" title="Tester les sites de ce mode" chevron onClick=${() => openSheet('custom', { render: () => html`<${TestSheet} />` })} />
       <//>
 
       <${Group} title="Lecture">

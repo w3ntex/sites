@@ -2,9 +2,10 @@
 // content that sexualizes minors. Queries matching these rules are refused and matching
 // results are dropped. This cannot be turned off.
 //
-// Drawn content (hentai, Rule34, 3D) gets stricter rules: drawn characters have no verified age,
-// and in that genre school settings mean the character is a minor. Those rules apply to Rule34
-// always, to everything in hentai mode, and to any query or result that looks drawn.
+// Drawn content (hentai, Rule34, 3D) and unverified posts (X) get stricter rules: nobody checked
+// the age of a drawn character or of a stranger on X, and in hentai school settings mean the
+// character is a minor. Those rules apply to the hentai sources and X always, to everything in
+// hentai mode, and to any query or result that looks drawn.
 
 const BLOCKED_TOKENS = new Set([
   'child', 'children', 'childs', 'kid', 'kids', 'kiddie', 'kiddy', 'underage', 'underaged', 'minor', 'minors',
@@ -25,7 +26,8 @@ const BLOCKED_PHRASES = [
 const DRAWN_BLOCKED_TOKENS = new Set([
   'schoolgirl', 'schoolgirls', 'schoolboy', 'schoolboys', 'highschooler', 'highschoolers', 'highschool',
   'middleschooler', 'gradeschooler', 'kindergarten', 'kindergartener', 'randoseru', 'jk', 'jc', 'js',
-  'joshikousei', 'joshikosei', 'joshikouse', 'younger',
+  'joshikousei', 'joshikosei', 'joshikouse', 'younger', 'teen', 'teens', 'teenager', 'teenagers', 'teenie',
+  'daughter', 'daughters', 'stepdaughter', 'stepdaughters', 'classmate', 'classmates', 'niece', 'nieces', 'imouto',
   // French
   'ecoliere', 'ecolieres', 'ecolier', 'ecoliers', 'lyceenne', 'lyceennes', 'lyceen', 'lyceens',
   'collegiens', 'collegiennes'
@@ -33,7 +35,7 @@ const DRAWN_BLOCKED_TOKENS = new Set([
 
 const DRAWN_BLOCKED_PHRASES = [
   'high school', 'school girl', 'school boy', 'aged down', 'age regression', 'age play', 'grade schooler',
-  'middle schooler', 'elementary school', 'kinder garten'
+  'middle schooler', 'elementary school', 'kinder garten', 'little sister', 'baby sister', 'step daughter', 'barely legal'
 ];
 
 /** Tags that denote minors on booru-style sites (Rule34); always excluded from those searches. */

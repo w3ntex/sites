@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="fr" data-theme="hentai">
+<html lang="fr" data-theme="porn">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#07040b">
+  <meta name="theme-color" content="#050505">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -17,15 +17,17 @@
   <link rel="apple-touch-icon" href="icons/app-180.png" id="link-touch-icon">
   <link rel="icon" type="image/png" href="icons/app-192.png">
   <link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/porn.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
   <script>
     // Apply the theme and the home-screen name/icon before the page is drawn / read by Safari.
     (function () {
       try {
         var s = JSON.parse(localStorage.getItem('sx.settings') || '{}') || {};
-        if (s.theme === 'classic') {
-          document.documentElement.setAttribute('data-theme', 'classic');
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#000000');
+        var hentai = s.mode ? s.mode === 'hentai' : (s.hentai === true || (s.hentai === undefined && s.theme === 'hentai'));
+        if (hentai) {
+          document.documentElement.setAttribute('data-theme', 'hentai');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#07040b');
         }
         var k = s.installIcon;
         var m = { classic: ['SearchX', 'classic'], calc: ['Calculatrice', 'calc'], notes: ['Notes', 'notes'], clock: ['Horloge', 'clock'] }[k];

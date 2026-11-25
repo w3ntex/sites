@@ -885,3 +885,194 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 .age-stamp b { font-weight: 400; font-size: 46px; line-height: 1; letter-spacing: -.02em; }
 .age-stamp span { font-size: 34px; line-height: 1; color: var(--accent-2); }
 .age-inner .age-kicker { margin: 0; font-family: var(--font-display); font-size: 13px; letter-spacing: .45em; color: var(--accent-2); }
+
+/* =====================================================================================
+   v2.5 — modes (porn / hentai), one tab per site, X accounts
+   ===================================================================================== */
+@font-face {
+  font-family: "SX Porn";
+  src: url("../fonts/porn.woff2") format("woff2");
+  font-display: swap;
+}
+
+/* ---- site tabs (results are never mixed) ---- */
+.stabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 8px 12px 6px; }
+.stabs::-webkit-scrollbar { display: none; }
+.stab {
+  flex: none; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: 11px;
+  background: var(--surface-2); color: var(--text-2); font-size: 14px; font-weight: 700; white-space: nowrap;
+  transition: background .15s, color .15s, box-shadow .15s, opacity .15s;
+}
+.stab em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.stab.on { color: var(--text); background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.stab.on em { color: var(--accent-2); }
+.stab.empty { opacity: .55; }
+.stab .warn { color: #ffb224; }
+.stab:active { transform: scale(.97); }
+
+.tab-error { text-align: center; padding: 40px 18px 20px; color: var(--text-2); }
+.tab-error h3 { margin: 0 0 6px; color: var(--text); font-size: 19px; }
+.tab-error p { margin: 0 auto 10px; max-width: 340px; font-size: 14.5px; }
+.tab-error .sheet-buttons { max-width: 340px; margin: 6px auto 4px; }
+.tab-error .debug-box { text-align: left; max-width: 380px; margin: 8px auto; }
+.other-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 6px; }
+.other-tabs .chip .dotc, .chip .dotc { width: 7px; height: 7px; border-radius: 50%; background: var(--c); display: inline-block; }
+
+/* ---- mode switch (home) and mode card (settings) ---- */
+.mode-switch { display: inline-flex; gap: 4px; padding: 3px; margin-top: 16px; border-radius: 13px; background: var(--surface-2); }
+.mode-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 10px; font-size: 14px; font-weight: 700; color: var(--text-2); }
+.mode-btn.on { color: #fff; box-shadow: 0 3px 14px rgba(0, 0, 0, .35); }
+.mode-btn.on.m-porn { background: linear-gradient(135deg, #ff1f4b, #ff5a3c 60%, #ff8a3d); }
+.mode-btn.on.m-hentai { background: linear-gradient(135deg, #ff4f9a, #e040d8 55%, #8b5cf6); }
+
+.mode-card { margin: 0 2px 26px; padding: 14px; border-radius: var(--radius); background: var(--surface); }
+.mode-card-title { margin: 0 2px 10px; font-size: 13px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.mode-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mode-opt {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 108px; padding: 13px;
+  border-radius: 14px; text-align: left; background: var(--surface-2); border: 1.5px solid transparent; transition: border-color .2s, transform .1s;
+}
+.mode-opt:active { transform: scale(.98); }
+.mode-opt strong { font-size: 17px; margin-top: 6px; }
+.mode-opt small { font-size: 12px; color: var(--text-3); line-height: 1.3; }
+.mode-opt-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; }
+.m-porn .mode-opt-icon { background: linear-gradient(135deg, #ff1f4b, #ff8a3d); box-shadow: 0 4px 16px rgba(255, 45, 85, .35); }
+.m-hentai .mode-opt-icon { background: linear-gradient(135deg, #ff4f9a, #8b5cf6); box-shadow: 0 4px 16px rgba(224, 64, 216, .35); }
+.mode-opt.on.m-porn { border-color: #ff3b5c; background: linear-gradient(160deg, rgba(255, 45, 85, .16), var(--surface-2) 70%); }
+.mode-opt.on.m-hentai { border-color: #e040d8; background: linear-gradient(160deg, rgba(224, 64, 216, .16), var(--surface-2) 70%); }
+.mode-opt-check { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--accent); }
+.mode-card-foot { margin: 11px 2px 0; font-size: 12.5px; color: var(--text-3); line-height: 1.4; }
+
+/* ---- X accounts ---- */
+.xavatar { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex: none; display: grid; place-items: center; background: var(--surface-3); color: var(--text-2); }
+.xavatar img, .xavatar .thumb-ph { width: 100%; height: 100%; object-fit: cover; }
+.xavatar.small { width: 34px; height: 34px; }
+.xprofile { display: flex; align-items: center; gap: 12px; padding: 12px; margin: 2px 0 14px; border-radius: 16px; background: var(--surface); }
+.xprofile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.xprofile-text strong { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xprofile-text small { font-size: 12.5px; color: var(--text-3); }
+.xhint { margin: 0 0 12px; padding: 10px 12px; border-radius: 13px; background: var(--surface); }
+.xhint p { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.xhint p .icon { display: inline-block; vertical-align: -3px; color: var(--accent-2); }
+.xhint .chips { margin: 6px -12px -4px; padding-bottom: 2px; }
+.xfollows { display: flex; gap: 14px; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 2px 10px 4px; }
+.xfollows::-webkit-scrollbar { display: none; }
+.xfollow { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-2); }
+.xfollow .xavatar { width: 58px; height: 58px; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.xfollow.add .xavatar { box-shadow: none; border: 1.5px dashed var(--text-3); background: transparent; }
+.xfollow span:last-child { max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xempty { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; background: var(--surface); text-align: left; color: var(--accent-2); }
+.xempty span { flex: 1; display: flex; flex-direction: column; gap: 2px; color: var(--text); font-size: 15px; }
+.xempty small { color: var(--text-3); font-size: 12.5px; line-height: 1.35; }
+.xacc-open { display: flex; flex-direction: column; text-align: left; font-size: 15.5px; color: var(--text); }
+.xacc-open small { color: var(--text-3); font-size: 12px; }
+
+/* =====================================================================================
+   Theme "porn": OLED black, crimson → amber, condensed titles, film grain.
+   ===================================================================================== */
+:root[data-theme="porn"] {
+  --bg: #050505;
+  --surface: #121013;
+  --surface-2: #1b181c;
+  --surface-3: #29242a;
+  --line: rgba(255, 255, 255, .08);
+  --text: #f8f4f3;
+  --text-2: rgba(246, 236, 233, .64);
+  --text-3: rgba(240, 225, 220, .38);
+  --accent: #ff2d55;
+  --accent-2: #ff6079;
+  --accent-soft: rgba(255, 45, 85, .15);
+  --grad: linear-gradient(135deg, #ff1f4b 0%, #ff4a3d 55%, #ff8a3d 100%);
+  --glow: 0 6px 22px rgba(255, 45, 85, .32);
+  --bar-bg: rgba(8, 6, 8, .82);
+  --font-display: "SX Porn", "Bebas Neue", Impact, "Arial Narrow", system-ui, sans-serif;
+}
+[data-theme="porn"] body { background: transparent; }
+[data-theme="porn"] ::selection { background: rgba(255, 45, 85, .4); }
+[data-theme="porn"] .app::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(110% 50% at 100% 0%, rgba(255, 45, 85, .13), transparent 62%),
+    radial-gradient(90% 45% at 0% 100%, rgba(255, 138, 61, .08), transparent 62%);
+}
+[data-theme="porn"] .page-title,
+[data-theme="porn"] .hero h1,
+[data-theme="porn"] .chip-section h3,
+[data-theme="porn"] .strip h3,
+[data-theme="porn"] .sheet-head h2,
+[data-theme="porn"] .age-inner h1,
+[data-theme="porn"] .lock-top h2,
+[data-theme="porn"] .lock-help h3,
+[data-theme="porn"] .empty h3,
+[data-theme="porn"] .tab-error h3,
+[data-theme="porn"] .day-title {
+  font-family: var(--font-display); font-weight: 400; font-synthesis: none; letter-spacing: .03em;
+}
+[data-theme="porn"] .page-title { font-size: 36px; line-height: 1; margin: 10px 4px 12px; }
+[data-theme="porn"] .chip-section h3, [data-theme="porn"] .strip h3 { font-size: 21px; }
+[data-theme="porn"] .sheet-head h2 { font-size: 23px; }
+[data-theme="porn"] .empty h3, [data-theme="porn"] .tab-error h3 { font-size: 24px; }
+[data-theme="porn"] .day-title { font-size: 19px; }
+[data-theme="porn"] .lock-top h2 { font-size: 30px; }
+[data-theme="porn"] .age-inner h1 { font-size: 38px; }
+[data-theme="porn"] .lock-help h3 { font-size: 22px; }
+
+[data-theme="porn"] .topbar { border-bottom-color: rgba(255, 45, 85, .14); }
+[data-theme="porn"] .tabbar { border-top-color: rgba(255, 45, 85, .14); }
+[data-theme="porn"] .tab-btn.on .icon { filter: drop-shadow(0 0 6px rgba(255, 45, 85, .6)); }
+[data-theme="porn"] .search-field.focused { box-shadow: 0 0 0 2px rgba(255, 45, 85, .4); }
+[data-theme="porn"] .type-pill.on { background: var(--grad); box-shadow: 0 2px 14px rgba(255, 45, 85, .4); }
+[data-theme="porn"] .btn:not(.ghost):not(.danger) { background: var(--grad); box-shadow: var(--glow); }
+[data-theme="porn"] .update-pill, [data-theme="porn"] .badge-n, [data-theme="porn"] .badge-q,
+[data-theme="porn"] .chip.filled, [data-theme="porn"] .vplay { background: var(--grad); }
+[data-theme="porn"] .switch.on { background: var(--accent); }
+[data-theme="porn"] .check.on { background: var(--accent); border-color: var(--accent); }
+[data-theme="porn"] .card-thumb { border-radius: 12px; }
+[data-theme="porn"] .card:active .card-thumb { box-shadow: 0 0 0 2px var(--accent), 0 0 20px rgba(255, 45, 85, .35); }
+[data-theme="porn"] .toast { border-color: rgba(255, 45, 85, .55); box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 20px rgba(255, 45, 85, .2); }
+[data-theme="porn"] .install-card { background: linear-gradient(135deg, rgba(255, 45, 85, .2), rgba(255, 138, 61, .08)); border-color: rgba(255, 45, 85, .38); }
+[data-theme="porn"] .empty-icon { background: var(--accent-soft); color: var(--accent-2); }
+[data-theme="porn"] .stab.on { background: rgba(255, 45, 85, .13); box-shadow: inset 0 -2.5px 0 var(--accent), inset 0 0 0 1px rgba(255, 45, 85, .35); }
+
+/* hero */
+[data-theme="porn"] .hero { position: relative; padding: 22px 2px 6px; }
+[data-theme="porn"] .hero-kicker { font-family: var(--font-display); font-size: 17px; letter-spacing: .28em; color: var(--accent-2); text-shadow: 0 0 14px rgba(255, 45, 85, .55); }
+[data-theme="porn"] .hero-kicker span { font-size: 14px; letter-spacing: .06em; padding: 2px 7px 1px; box-shadow: 0 0 12px rgba(255, 45, 85, .45); }
+[data-theme="porn"] .hero h1 { font-size: 46px; line-height: .98; letter-spacing: .02em; }
+[data-theme="porn"] .hero h1 span {
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255, 45, 85, .3));
+}
+[data-theme="porn"] .hero p { margin-top: 12px; }
+
+/* categories */
+[data-theme="porn"] .cat {
+  border: 1px solid transparent;
+  background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    linear-gradient(135deg, rgba(255, 45, 85, .55), rgba(255, 138, 61, .3)) border-box;
+}
+[data-theme="porn"] .cat b { font-family: var(--font-display); font-size: 22px; letter-spacing: .04em; color: var(--text); }
+[data-theme="porn"] .cat span { color: var(--accent-2); font-size: 11px; text-transform: lowercase; }
+[data-theme="porn"] .cat:active { box-shadow: 0 0 18px rgba(255, 45, 85, .35); }
+
+/* lock & age: red glow, soft bokeh and film grain */
+[data-theme="porn"] .lock-screen, [data-theme="porn"] .age-gate {
+  background:
+    radial-gradient(60% 40% at 50% 38%, rgba(255, 45, 85, .2), transparent 70%),
+    radial-gradient(35% 22% at 18% 78%, rgba(255, 138, 61, .1), transparent 70%),
+    radial-gradient(28% 18% at 85% 18%, rgba(255, 45, 85, .1), transparent 70%),
+    #050505;
+}
+[data-theme="porn"] .lock-screen::before, [data-theme="porn"] .age-gate::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .09; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+}
+[data-theme="porn"] .lock-icon { background: rgba(255, 45, 85, .14); color: var(--accent-2); box-shadow: inset 0 0 0 1.5px rgba(255, 45, 85, .45), 0 0 36px rgba(255, 45, 85, .3); }
+[data-theme="porn"] .pin-dots span.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px rgba(255, 45, 85, .7); }
+.age-stamp.porn { transform: none; box-shadow: inset 0 0 0 6px var(--accent), inset 0 0 0 10px rgba(255, 45, 85, .22), 0 0 44px rgba(255, 45, 85, .45); }
+.age-stamp.porn b { font-size: 64px; letter-spacing: 0; }
+.age-stamp.porn span { font-size: 44px; color: var(--accent-2); }
+[data-theme="porn"] .age-inner .age-kicker { font-family: var(--font-display); font-size: 17px; letter-spacing: .32em; text-transform: uppercase; color: var(--accent-2); }
+
+/* the classic badge is not used any more */
+.age-badge { display: none; }

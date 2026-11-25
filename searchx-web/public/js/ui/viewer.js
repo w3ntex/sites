@@ -5,7 +5,7 @@ import { state, notify, openSheet, toast } from '../state.js';
 import { SOURCES } from '../config.js';
 import { toggleFavorite, isFavorite, logHistory, addWatched } from '../library.js';
 import { showOnlyCreator } from '../search.js';
-import { downloadUrl } from '../api.js';
+import { downloadUrl, xVideoUrl } from '../api.js';
 import { haptic } from '../lib/haptics.js';
 import { duration, compact } from '../lib/format.js';
 
@@ -30,7 +30,8 @@ function Poster({ item, children }) {
   </div>`;
 }
 
-function OpenOnSite({ item, text = "Ce contenu se lit sur le site d'origine." }) {
+function OpenOnSite({ item, text }) {
+  text = text || "Ce contenu se lit sur le site d'origine.";
   return html`<${Poster} item=${item}>
     <div class="vposter-msg">
       <p>${text}</p>
@@ -164,11 +165,31 @@ function ZoomImage({ item, active, onZoom, onTap }) {
   </div>`;
 }
 
+/** X video: its file address is read from the post page (through the server) when it is shown. */
+function XVideo({ item, active, onTap }) {
+  const [video, setVideo] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!active || video || error) return;
+    const ctrl = new AbortController();
+    xVideoUrl(item, ctrl.signal).then(setVideo).catch(e => { if (!ctrl.signal.aborted) setError(e?.message || 'Vidéo indisponible.'); });
+    return () => ctrl.abort();
+  }, [active]);
+  if (error) return html`<${OpenOnSite} item=${item} text=${`${error} Tu peux l'ouvrir sur X.`} />`;
+  if (!video) return html`<${Poster} item=${item}><span class="vloading"><${Spinner} size=${28} /></span><//>`;
+  return html`<${NativeVideo} item=${{ ...item, media: video.url }} active=${active} onTap=${onTap} />`;
+}
+
+const OPEN_TEXT = {
+  hstream: "Les épisodes se regardent sur hstream.moe (le site refuse d'être affiché dans une autre app). Le lien s'ouvre dans Safari."
+};
+
 function Slide({ item, active, onZoom, onTap }) {
   if (item.type === 'image') return html`<${ZoomImage} item=${item} active=${active} onZoom=${onZoom} onTap=${onTap} />`;
+  if (item.src === 'x' && !item.media && item.type !== 'image') return html`<${XVideo} item=${item} active=${active} onTap=${onTap} />`;
   if (item.media && PLAYABLE.test(item.media)) return html`<${NativeVideo} item=${item} active=${active} onTap=${onTap} />`;
   if (item.embed) return html`<${EmbedPlayer} item=${item} active=${active} autostart=${item.type === 'gif'} />`;
-  return html`<${OpenOnSite} item=${item} />`;
+  return html`<${OpenOnSite} item=${item} text=${OPEN_TEXT[item.src]} />`;
 }
 
 export function Viewer() {
