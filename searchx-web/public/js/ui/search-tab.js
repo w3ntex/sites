@@ -5,7 +5,7 @@ import { Grid, SkeletonGrid, Strip } from './grid.js';
 import { state, notify, emptySearch, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
 import {
   SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, LAYOUTS, MODES, HENTAI_CATEGORIES, PORN_CATEGORIES,
-  siteSearchUrl, modeOf, redgifsSitePage
+  siteSearchUrl, modeOf, redgifsSitePage, xAppUrl
 } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
@@ -190,19 +190,29 @@ function XProfile({ profile, query }) {
   return html`<div class="xprofile">
     <span class="xavatar">${profile?.avatar ? html`<${Thumb} src=${profile.avatar} />` : html`<${Icon} name="user" size=${22} />`}</span>
     <span class="xprofile-text"><strong>${profile?.name || user}</strong><small>@${user} · photos et vidéos récentes</small></span>
-    <button type="button" class=${cx('btn small', following && 'ghost')} onClick=${() => {
-      haptic();
-      toggleFollow({ user, name: profile?.name, avatar: profile?.avatar });
-    }}><${Icon} name=${following ? 'userCheck' : 'userPlus'} size=${15} />${following ? 'Suivi' : 'Suivre'}</button>
+    <div class="xprofile-actions">
+      <button type="button" class=${cx('btn small', following && 'ghost')} onClick=${() => {
+        haptic();
+        toggleFollow({ user, name: profile?.name, avatar: profile?.avatar });
+      }}><${Icon} name=${following ? 'userCheck' : 'userPlus'} size=${15} />${following ? 'Suivi' : 'Suivre'}</button>
+      <a class="text-btn small-link" href=${xAppUrl({ user })} onClick=${() => haptic()}>Ouvrir dans X</a>
+    </div>
   </div>`;
+}
+
+/** Opens the same search in the X app, with the user's own account (all videos). */
+function XAppButton({ q }) {
+  return html`<a class="btn ghost small xapp-btn" href=${xAppUrl({ q })} onClick=${() => haptic()}>
+    <${Icon} name="external" size=${15} /> Chercher « ${q} » dans l'app X (ton compte)</a>`;
 }
 
 /** Shown on the X tab for word searches: X hides most adult posts there. */
 function XHint() {
   const follows = state.xFollows.slice(0, 12);
   return html`<div class="xhint">
-    <p><${Icon} name="info" size=${15} /> Sur X, la recherche par mots ne renvoie qu'une poignée de posts adultes (X les cache sans compte).
-      Pour du volume : un compte précis (<b>@nom</b>), ou l'onglet RedGIFs.</p>
+    <p><${Icon} name="info" size=${15} /> Sans compte connecté, X ne montre qu'une poignée de posts adultes par mot.
+      Ici : un compte précis (<b>@nom</b>) marche très bien. Pour tout voir avec ton compte, ouvre la recherche dans l'app X :</p>
+    <${XAppButton} q=${state.search.sent || state.search.query} />
     ${follows.length ? html`<div class="chips scroll-x">${follows.map(f => html`<button type="button" key=${f.user} class="chip small"
       onClick=${() => { haptic(); runSearch(`@${f.user}`); }}><${Icon} name="at" size=${12} />${f.user}</button>`)}</div>` : null}
   </div>`;

@@ -1,6 +1,6 @@
 import { HENTAI_SUBREDDITS } from './shared/reddit.js';
 
-export const APP_VERSION = '2.5.4';
+export const APP_VERSION = '2.5.5';
 
 // ---- modes ---------------------------------------------------------------------------------------
 // Two separate apps in one: each mode has its own sources (shown one site at a time, never mixed)
@@ -79,6 +79,16 @@ export const PORN_CATEGORIES = [
   { q: 'asian', fr: 'Asiatique' }, { q: 'ebony', fr: 'Ebony' }, { q: 'lesbian', fr: 'Lesbiennes' }, { q: 'pov', fr: 'POV' },
   { q: 'blowjob', fr: 'Fellation' }, { q: 'anal', fr: 'Anal' }, { q: 'cosplay', fr: 'Cosplay' }, { q: 'squirt', fr: 'Squirt' }
 ];
+
+/**
+ * The X app (where the user is logged in, with videos): twitter:// links open it directly.
+ * kind: { q } search (media only), { user } account, { tweet } post.
+ */
+export function xAppUrl({ q = '', user = '', tweet = '' } = {}) {
+  if (tweet) return `twitter://status?id=${encodeURIComponent(tweet)}`;
+  if (user) return `twitter://user?screen_name=${encodeURIComponent(user.replace(/^@/, ''))}`;
+  return `twitter://search?query=${encodeURIComponent(`${q} filter:media`)}`;
+}
 
 /** RedGIFs' own search page (the route its website uses), shown inside the app without a relay. */
 export function redgifsSitePage(query, { mode = 'porn', media = 'all' } = {}) {

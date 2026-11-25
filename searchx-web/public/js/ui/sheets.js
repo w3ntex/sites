@@ -2,7 +2,7 @@ import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Sheet, Switch, SourceBadge, Thumb, cx } from './common.js';
 import { state, closeSheet, openSheet, toast, notify, updateSettings } from '../state.js';
-import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl, modeOf, modeSources } from '../config.js';
+import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl, modeOf, modeSources, xAppUrl } from '../config.js';
 import {
   setFilters, resetFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch, disableSources,
   isFollowing, toggleFollow
@@ -113,7 +113,10 @@ function ItemActionsSheet({ item }) {
         </button>
         <button type="button" class="action" onClick=${() => { toast(toggleFollow({ user: xUser }) ? `@${xUser} suivi` : `@${xUser} n'est plus suivi`); close(); }}>
           <${Icon} name=${following ? 'userCheck' : 'userPlus'} /><span>${following ? `Ne plus suivre @${xUser}` : `Suivre @${xUser}`}</span>
-        </button>`
+        </button>
+        <a class="action" href=${xAppUrl({ tweet: item.tweet })} onClick=${() => close()}>
+          <${Icon} name="external" /><span>Ouvrir dans l'app X (ton compte)</span>
+        </a>`
       : (item.by || []).slice(0, 3).map(name => html`<button type="button" class="action" key=${name}
         onClick=${() => { showOnlyCreator(name); state.viewer = null; state.tab = 'search'; close(); }}>
         <${Icon} name="user" /><span>Seulement ${name}</span>

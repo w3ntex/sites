@@ -1104,3 +1104,8 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 .rg-embed-bar .icon { display: inline-block; vertical-align: -2px; color: var(--accent-2); }
 .rg-embed-bar .text-btn { font-size: 13px; white-space: nowrap; }
 .rg-embed iframe { width: 100%; height: calc(100dvh - var(--sat) - var(--sab) - var(--tabbar-h) - 190px); min-height: 420px; border: 0; background: #000; }
+
+/* v2.5.5 — open X searches / accounts / posts in the X app (the user's own account) */
+.xapp-btn { width: 100%; margin-top: 8px; }
+.xprofile-actions { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; }
+.xprofile-actions .small-link { font-size: 12.5px; padding: 2px 4px; }
