@@ -1,0 +1,27 @@
+{
+  // Cloudflare Worker that serves the SearchX web app (./public) and its search API (src/worker.js).
+  // Used when this folder is the build root. Cloudflare's default (repository root) uses ../wrangler.jsonc.
+  "name": "searchx",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // Spotify sign-in hand-over: keeps a one-time code for 10 minutes (free plan, created on deploy).
+  // Mailbox: X accounts shared from the X app, waiting for the app (30 days at most).
+  "durable_objects": {
+    "bindings": [
+      { "name": "SPOTIFY_HANDOFF", "class_name": "SpotifyHandoff" },
+      { "name": "MAILBOX", "class_name": "Mailbox" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SpotifyHandoff"] },
+    { "tag": "v2", "new_sqlite_classes": ["Mailbox"] }
+  ]
+  // Optional secrets/vars (dashboard → Settings → Variables):
+  //   R34_API_KEY / R34_USER_ID  Rule34 credentials (otherwise sent by the app from its settings)
+  //   ACCESS_KEY                 if set, the app must send this key (Réglages → Serveur)
+}

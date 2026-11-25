@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr" data-theme="porn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#050505">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SearchX" id="meta-app-title">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SearchX</title>
+  <link rel="manifest" href="manifest.webmanifest" id="link-manifest">
+  <link rel="apple-touch-icon" href="icons/app-180.png" id="link-touch-icon">
+  <link rel="icon" type="image/png" href="icons/app-192.png">
+  <link rel="preload" href="fonts/display.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/porn.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    // Apply the theme and the home-screen name/icon before the page is drawn / read by Safari.
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('sx.settings') || '{}') || {};
+        var hentai = s.mode ? s.mode === 'hentai' : (s.hentai === true || (s.hentai === undefined && s.theme === 'hentai'));
+        if (hentai) {
+          document.documentElement.setAttribute('data-theme', 'hentai');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#07040b');
+        }
+        var k = s.installIcon;
+        var m = { classic: ['SearchX', 'classic'], calc: ['Calculatrice', 'calc'], notes: ['Notes', 'notes'], clock: ['Horloge', 'clock'] }[k];
+        if (!m) return;
+        document.getElementById('meta-app-title').setAttribute('content', m[0]);
+        document.getElementById('link-touch-icon').setAttribute('href', 'icons/' + m[1] + '-180.png');
+        document.getElementById('link-manifest').setAttribute('href', 'manifest-' + m[1] + '.webmanifest');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot"><img src="icons/app-180.png" alt="" width="72" height="72"></div>
+  </div>
+  <noscript><p style="color:#fff;padding:24px">SearchX a besoin de JavaScript.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

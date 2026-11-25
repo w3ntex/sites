@@ -1,0 +1,30 @@
+{
+  // Cloudflare Worker for the SearchX web app (searchx-web/). Kept at the repository root so that
+  // Cloudflare's "Import a repository" works with its default settings (no root directory needed).
+  "name": "searchx",
+  "main": "searchx-web/src/worker.js",
+  "compatibility_date": "2025-09-01",
+  // Serve the app at https://searchx.<your-subdomain>.workers.dev
+  "workers_dev": true,
+  "assets": {
+    "directory": "./searchx-web/public",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // Spotify sign-in hand-over: keeps a one-time code for 10 minutes (free plan, created on deploy).
+  // Mailbox: X accounts shared from the X app, waiting for the app (30 days at most).
+  "durable_objects": {
+    "bindings": [
+      { "name": "SPOTIFY_HANDOFF", "class_name": "SpotifyHandoff" },
+      { "name": "MAILBOX", "class_name": "Mailbox" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SpotifyHandoff"] },
+    { "tag": "v2", "new_sqlite_classes": ["Mailbox"] }
+  ]
+  // Optional variables (Worker → Settings → Variables and Secrets):
+  //   R34_API_KEY / R34_USER_ID  Rule34 credentials (otherwise entered in the app's settings)
+  //   ACCESS_KEY                 if set, the app must send this key (Réglages → Avancé → Serveur)
+  //   REDGIFS_TOKEN              your own RedGIFs token (otherwise a free temporary one is used)
+}

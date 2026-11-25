@@ -1,0 +1,7 @@
+SearchX.xcodeproj/
+Info.plist
+build/
+DerivedData/
+*.ipa
+xcuserdata/
+build.log

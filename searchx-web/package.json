@@ -1,0 +1,16 @@
+{
+  "name": "searchx-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SearchX web app (PWA) + Cloudflare Worker search API",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "node scripts/dev-server.mjs",
+    "dev:mock": "node scripts/dev-server.mjs --mock",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.2"
+  }
+}
