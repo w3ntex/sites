@@ -17,6 +17,26 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.6 (vertical viewer, music):**
+* **Viewer**: one item per screen, like TikTok or Reddit. Swipe up for the next item, down for the previous one. Swipe right (or tap ✕) to close. ▲/▼ buttons and the keyboard arrows also work. Zoom on an image locks the paging.
+* **Video controls**: a time bar you can drag, a sound button and full screen replace the native controls (iOS put those under the app's own bar). Tap a video to pause or play.
+  * All slides share one `<video>` element. iOS remembers per element that a tap allowed sound, and that element is unlocked by the tap that opens the viewer, so videos keep their sound while swiping.
+  * If iOS still refuses sound, the video plays muted and the sound button says "Activer le son".
+* **Music during videos** (Réglages → Musique): uses the Audio Session API (`navigator.audioSession.type = 'ambient'`, Safari 17+). The music of other apps keeps playing, mixed with the video's sound, instead of being paused.
+  * iOS doesn't let web apps lower ("duck") another app's music.
+  * Ambient sound follows the silent switch.
+  * So with Spotify connected, SearchX asks for it only while Spotify is playing on the phone.
+* **Spotify remote + music island**: Spotify's Web Playback SDK doesn't run on iPhone. The music plays in the Spotify app and SearchX controls it through the Spotify Web API.
+  * Controls: title, cover, time, play/pause, previous/next, seek, shuffle, "J'aime". The library endpoints try `/me/library`, the February 2026 replacement for `/me/tracks`, and fall back to the old ones.
+  * The island: only native apps can draw in the Dynamic Island, where iOS shows Spotify's own controls. In the installed app on an iPhone with a Dynamic Island (top safe area ≥ 51 px), SearchX draws a black pill around it that opens into a square of controls, like a Live Activity. Elsewhere it's a mini player above the tab bar.
+  * Sign-in: the user's own Spotify developer app (Client ID), using Authorization Code + PKCE. Tokens stay on the phone.
+  * Sign-in hand-off: on iPhone the Spotify page can end in Safari, whose storage is separate from the installed app's. `/api/spotify/callback` hands the one-time code back:
+    * directly, when it shares the app's storage;
+    * otherwise through a Durable Object (`SPOTIFY_HANDOFF`, 10 minutes, read once) that the app polls (`/api/spotify/poll`);
+    * or by copy/paste as a last resort.
+    The code is useless without the PKCE secret, which never leaves the app.
+  * Since February 2026, Spotify developer apps need a **Premium** owner. Up to 5 users can be added in the app's User Management.
+
 **v2.5.4:** Without a relay, the RedGIFs tab shows RedGIFs' own search page (`/search/gifs?query=`, the route its website uses) inside the app. The phone loads it itself, so the server's 429 limit doesn't apply. The relay is optional: it brings RedGIFs results into the SearchX grid (favorites, history, filters, viewer).
 
 **v2.5.2:** RedGIFs relay (see above). The "Ouvrir sur RedGIFs" link now uses the site's real search URL (`/search/gifs?query=`).
@@ -114,6 +134,8 @@ Set these in the Worker's **Settings → Variables and Secrets**:
 | `ACCESS_KEY` | If set, the API answers only clients that send this key (Réglages → Avancé → Serveur). |
 | `REDGIFS_TOKEN` | Your own RedGIFs bearer token. Otherwise a free temporary token is fetched automatically. |
 
+The Durable Object `SpotifyHandoff` (binding `SPOTIFY_HANDOFF`, SQLite storage, available on the free plan) is created by the first deploy from `wrangler.jsonc`. Nothing needs to be set up.
+
 ### Alternative: GitHub Actions
 
 `.github/workflows/searchx-web.yml` runs the tests on every push. If the repository secrets `CLOUDFLARE_API_TOKEN` (from the "Edit Cloudflare Workers" template) and `CLOUDFLARE_ACCOUNT_ID` exist, it also deploys.
@@ -134,4 +156,5 @@ npm run dev         # same, against the real sites
 * **Reddit**: the phone queries Reddit directly first, which looks like normal browsing. It falls back to the Worker only if that fails.
 * **Rule34** needs a free API key (rule34.xxx → My Account → Options → API Access Credentials).
 * **Downloads**: only direct files (RedGIFs, Rule34, Reddit) can be downloaded. Tube-site videos can't be saved.
+* **Spotify**: the remote needs Spotify Premium plus a developer app with the redirect URI `https://<your app>/api/spotify/callback`. Réglages → Musique → Spotify walks through it. Volume can't be changed remotely on an iPhone.
 * **Separate data**: an app installed on the home screen keeps its own data, separate from Safari's. Export a backup before reinstalling or changing the icon.

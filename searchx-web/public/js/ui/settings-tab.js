@@ -7,6 +7,8 @@ import { SOURCES, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, MODES, modeO
 import { clearRecent, disableSources, enableSource } from '../search.js';
 import { switchMode } from './search-tab.js';
 import { RelaySheet } from './relay.js';
+import { SpotifySheet, MixRow } from './music.js';
+import { useMusic } from '../lib/spotify.js';
 import { clearHistory, exportData, importData } from '../library.js';
 import { searchSource, health, resetDirect } from '../api.js';
 import { biometricsAvailable, registerBiometrics } from '../lib/lock.js';
@@ -145,6 +147,22 @@ async function exportBackup() {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** Réglages → Musique: Spotify remote, island, music during videos. */
+function MusicGroup() {
+  const m = useMusic();
+  const s = state.settings;
+  const now = m.playback?.track;
+  return html`<${Group} title="Musique" footer="iOS réserve la vraie Dynamic Island aux apps installées depuis l’App Store : il y affiche les commandes de Spotify. SearchX ajoute sa propre île juste autour.">
+    <${Row} icon="spotify" iconColor="#1db954" title="Spotify" chevron
+      subtitle=${m.connected ? (now ? `${now.name} · ${now.artist}` : 'Connecté · rien en lecture') : 'Contrôle ta musique depuis SearchX (Premium)'}
+      right=${m.connected ? 'Connecté' : m.pending ? 'En cours…' : 'À connecter'}
+      onClick=${() => openSheet('custom', { render: () => html`<${SpotifySheet} />` })} />
+    ${m.connected && html`<${Row} icon="music" iconColor="#1db954" title="Île musicale" subtitle="En haut de l’écran ; touche-la pour les commandes."
+      right=${html`<${Switch} checked=${s.musicIsland} onChange=${v => updateSettings({ musicIsland: v })} label="Île musicale" />`} />`}
+    <${MixRow} inGroup />
+  <//>`;
+}
+
 export function SettingsTab() {
   const s = state.settings;
   const [bioOK, setBioOK] = useState(false);
@@ -267,6 +285,8 @@ export function SettingsTab() {
         <${Row} icon="mute" iconColor="#6f6e77" title="GIFs sans le son" right=${html`<${Switch} checked=${s.muteGifs} onChange=${v => updateSettings({ muteGifs: v })} label="Muet" />`} />
         <${Row} icon="hand" iconColor="#0091ff" title="Retour haptique" right=${html`<${Switch} checked=${s.haptics} onChange=${v => updateSettings({ haptics: v })} label="Haptique" />`} />
       <//>
+
+      <${MusicGroup} />
 
       <${Group} title="Recherche">
         <${Row} icon="sliders" iconColor="#3e63dd" title="Filtres par défaut" chevron onClick=${() => openSheet('filters', { target: 'default' })} />

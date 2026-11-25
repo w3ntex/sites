@@ -1,6 +1,6 @@
 import { HENTAI_SUBREDDITS } from './shared/reddit.js';
 
-export const APP_VERSION = '2.5.5';
+export const APP_VERSION = '2.6.0';
 
 // ---- modes ---------------------------------------------------------------------------------------
 // Two separate apps in one: each mode has its own sources (shown one site at a time, never mixed)
@@ -163,5 +163,7 @@ export const DEFAULT_SETTINGS = {
   r34user: '',
   accessKey: '',
   rgRelay: '',          // RedGIFs relay on Vercel (RedGIFs limits Cloudflare's servers)
+  musicMix: false,      // keep the music of other apps playing during videos (turned on with Spotify)
+  musicIsland: true,    // Spotify island at the top of the screen (when Spotify is connected)
   mode: 'porn'          // 'porn' | 'hentai' (also picks the theme)
 };

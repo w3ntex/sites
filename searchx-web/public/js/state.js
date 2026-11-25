@@ -121,7 +121,8 @@ export async function resetEverything() {
   const kept = {};
   for (const k of KEPT_ON_RESET) if (state.settings[k]) kept[k] = state.settings[k];
   try {
-    for (const k of Object.keys(localStorage)) if (k.startsWith('sx.')) localStorage.removeItem(k);
+    // The Spotify connection is kept too (it is the user's Spotify account, not SearchX data).
+    for (const k of Object.keys(localStorage)) if (k.startsWith('sx.') && k !== 'sx.spotify' && k !== 'sx.spotify.clientId') localStorage.removeItem(k);
   } catch { /* ignore */ }
   if (Object.keys(kept).length) save('settings', kept);
   try { for (const k of await caches.keys()) await caches.delete(k); } catch { /* ignore */ }

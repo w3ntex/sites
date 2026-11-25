@@ -6,6 +6,7 @@
 //   GET /api/suggest?q=<text>            Rule34 tag autocomplete
 //   GET /api/dl?url=<direct media>&name= download passthrough (whitelisted media hosts)
 //   GET /api/xvideo?user=<name>&id=<post>  direct file of an X video (read from a Nitter mirror)
+//   GET /api/spotify/callback | /api/spotify/poll   Spotify sign-in hand-over (see spotify.js)
 
 import { friendlyMessage, UpstreamError, MOBILE_UA } from './lib.js';
 import { isQueryAllowed, isItemAllowed } from '../public/js/shared/safety.js';
@@ -21,8 +22,12 @@ import * as hstream from './sources/hstream.js';
 import * as r34video from './sources/r34video.js';
 import * as danbooru from './sources/danbooru.js';
 import * as yandere from './sources/yandere.js';
+import { SpotifyHandoff, handleSpotifyCallback, handleSpotifyPoll } from './spotify.js';
 
-export const VERSION = '2.5.5';
+// Durable Object class used by the Spotify sign-in hand-over (wrangler.jsonc → durable_objects).
+export { SpotifyHandoff };
+
+export const VERSION = '2.6.0';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).
@@ -174,7 +179,9 @@ async function handleXVideo(url, ctx) {
 async function handleApi(request, url, env, ctx) {
   if (request.method !== 'GET') return json({ ok: false, error: 'Méthode non autorisée.' }, 405);
   const sentKey = request.headers.get('x-sx-key') || url.searchParams.get('k');
-  if (env?.ACCESS_KEY && sentKey !== env.ACCESS_KEY && url.pathname !== '/api/health') {
+  // The Spotify sign-in page is opened by Spotify (no key); it only stores a one-time code.
+  const open = url.pathname === '/api/health' || url.pathname === '/api/spotify/callback';
+  if (env?.ACCESS_KEY && sentKey !== env.ACCESS_KEY && !open) {
     return json({ ok: false, error: "Clé d'accès requise (Réglages → Serveur).", kind: 'access' }, 401);
   }
   switch (url.pathname) {
@@ -183,6 +190,8 @@ async function handleApi(request, url, env, ctx) {
     case '/api/suggest': return handleSuggest(url);
     case '/api/dl': return handleDownload(url);
     case '/api/xvideo': return handleXVideo(url, ctx);
+    case '/api/spotify/callback': return handleSpotifyCallback(url, env);
+    case '/api/spotify/poll': return handleSpotifyPoll(url, env);
     default: return json({ ok: false, error: 'Introuvable.' }, 404);
   }
 }

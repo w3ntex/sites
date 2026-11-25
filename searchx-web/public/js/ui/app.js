@@ -6,6 +6,7 @@ import { LibraryTab } from './library-tab.js';
 import { HistoryTab } from './history-tab.js';
 import { SettingsTab } from './settings-tab.js';
 import { Viewer } from './viewer.js';
+import { MusicIsland } from './music.js';
 import { SheetHost } from './sheets.js';
 import { LockScreen } from './lock.js';
 import { state, notify, useAppState, updateSettings, lockEnabled, switchTab } from '../state.js';
@@ -198,6 +199,7 @@ export function App() {
     ${page}
     <${TabBar} />
     ${s.viewer && html`<${Viewer} key=${s.viewer.key} />`}
+    ${s.settings.ageOK && !locked && !s.hidden && s.settings.musicIsland && html`<${MusicIsland} />`}
     <${SheetHost} />
     ${!locked && html`<${Toast} toast=${s.toast} />`}
     ${s.update && html`<button type="button" class="update-pill" onClick=${() => location.reload()}><${Icon} name="refresh" size=${15} /> Nouvelle version · toucher pour recharger</button>`}
