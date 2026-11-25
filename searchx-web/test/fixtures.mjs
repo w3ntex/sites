@@ -191,6 +191,33 @@ export function nitterRss({ account = null, n = 8, q = 'sample', start = 0 } = {
     `<title>${title}</title><link>http://${NITTER}/${account || 'search'}</link><description>Twitter feed</description>${image}\n${items}</channel></rss>`;
 }
 
+/** Nitter's account search (/search?f=users&q=…), with the markup of Nitter's renderUser. */
+export function nitterUsersHtml(q = 'sample') {
+  const base = String(q).replace(/^@/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 10) || 'sample';
+  const users = [
+    { user: base, name: `${base[0].toUpperCase()}${base.slice(1)} 🏰`, verified: true, bio: `Official ${base} &amp; friends` },
+    { user: `${base}_vids`, name: `${base} vids`, verified: false, bio: 'Daily clips' },
+    { user: `the${base}`, name: `The ${base}`, verified: false, bio: '' },
+    { user: `${base}_priv`, name: `${base} private`, verified: false, bio: 'Private account', locked: true }
+  ];
+  const items = users.map(u => `<div class="timeline-item " data-username="${u.user}">
+  <a class="tweet-link" href="/${u.user}"></a>
+  <div class="tweet-body profile-result">
+    <div class="tweet-header">
+      <a class="tweet-avatar" href="/${u.user}"><img class="avatar round" src="/pic/pbs.twimg.com%2Fprofile_images%2F1${u.user.length}%2F${u.user}_bigger.jpg" alt="" loading="lazy"></a>
+      <div class="tweet-name-row">
+        <div class="fullname-and-username">
+          <a class="fullname" href="/${u.user}" title="${u.name}">${u.name}${u.verified ? '<div class="verified-icon blue" title="Verified blue account"><div class="icon-container"><span class="icon-ok verified-icon-check"></span></div></div>' : ''}${u.locked ? ' <span class="icon-lock" title="Protected account"></span>' : ''}</a>
+        </div>
+      </div>
+      <a class="username" href="/${u.user}" title="@${u.user}">@${u.user}</a>
+    </div>
+    <div class="tweet-content media-body" dir="auto">${u.bio}</div>
+  </div>
+</div>`).join('\n');
+  return `<!DOCTYPE html><html><head><title>Search | nitter</title></head><body><div class="timeline">${items}<div class="show-more"><a href="?f=users&q=${base}&cursor=abc">Load more</a></div></div></body></html>`;
+}
+
 /** A Nitter post page with a video (HLS player + download links in two sizes). */
 export function nitterStatusHtml(id = '2100000000000000001') {
   const v = encodeURIComponent(`https://video.twimg.com/amplify_video/${id}/vid/avc1/720x1280/small.mp4?tag=29`);
@@ -322,6 +349,7 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
       const rssPage = (opts, n) => new Response(nitterRss({ ...opts, n: pg === 3 ? Math.ceil(n / 2) : n, start: (pg - 1) * n }),
         { headers: { 'content-type': 'application/rss+xml', ...(pg < 3 ? { 'min-id': `p${pg + 1}` } : {}) } });
       if (path === '/search/rss') return rssPage({ q: url.searchParams.get('q') || '' }, 8);
+      if (path === '/search' && url.searchParams.get('f') === 'users') return text(nitterUsersHtml(url.searchParams.get('q') || ''));
       const acc = /^\/([A-Za-z0-9_]+)\/media\/rss$/.exec(path);
       if (acc) return acc[1] === 'nobody' ? text('User not found', 404) : rssPage({ account: acc[1] }, 12);
       const st = /^\/[A-Za-z0-9_]+\/status\/(\d+)$/.exec(path);

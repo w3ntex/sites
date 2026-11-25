@@ -17,6 +17,12 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.5 (X account suggestions):**
+* Adding an account (Réglages → Comptes X suivis) suggests the X accounts matching what is typed: name or @, with picture, certified badge, private lock and the start of the bio. One tap follows the account, saving its name and picture.
+* Typing "@…" in the search field suggests matching accounts too, under the followed ones.
+* `GET /api/xusers?q=` reads Nitter's account search (`/search?f=users`), cached 5 minutes.
+* Nitter image addresses are read in every form, including `/pic/pbs.twimg.com%2F…` and the base64 `/pic/enc/…` of some mirrors. Posts from those mirrors were dropped before.
+
 **v2.7.4 (X tab reads like X):**
 * Posts are ordered by their X id, newest first, as on X, even when pages come from different mirrors or caches. The photos of one post stay together.
 * The first page of an X timeline is never served from the server cache.

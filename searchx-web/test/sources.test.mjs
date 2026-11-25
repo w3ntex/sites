@@ -93,6 +93,24 @@ test('X: an account keeps going page after page (Nitter Min-Id cursor)', async (
   assert.deepEqual(none.body.items, [], 'no cursor: no next page');
 });
 
+test('X: account suggestions (Nitter account search)', async () => {
+  const { parseNitterUsers } = await import('../src/sources/x.js');
+  const users = parseNitterUsers(F.nitterUsersHtml('palace'));
+  assert.deepEqual(users.map(u => u.user), ['palace', 'palace_vids', 'thepalace', 'palace_priv']);
+  assert.equal(users[0].name, 'Palace 🏰');
+  assert.equal(users[0].verified, true);
+  assert.equal(users[1].verified, false);
+  assert.equal(users[3].locked, true);
+  assert.equal(users[0].avatar, 'https://pbs.twimg.com/profile_images/16/palace_bigger.jpg');
+  assert.equal(users[0].bio, 'Official palace & friends');
+  assert.deepEqual(parseNitterUsers('<div class="timeline"><div class="timeline-none">No items found</div></div>'), []);
+  const r = await api('/api/xusers?q=%40palace');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.users.length, 4);
+  assert.equal(r.body.users[0].user, 'palace');
+  assert.deepEqual((await api('/api/xusers?q=p')).body.users, [], 'too short: nothing asked');
+});
+
 test('X: "Load more" cursor of a Nitter HTML timeline', async () => {
   const { nitterShowMoreCursor } = await import('../src/sources/x.js');
   const html = '<div class="timeline"><div class="timeline-item">…</div><div class="show-more"><a href="?cursor=DAABCgABG%2Bx_y-z">Load more</a></div></div>';
@@ -259,4 +277,17 @@ test('Rule34Video: current markup (double spaces, lazy images, views and rating)
   assert.equal(items[0].rating, 96);
   assert.equal(items[1].thumb, 'https://rule34video.com/contents/videos_screenshots/1/4440929/336x189/1.jpg', 'lazy image: the real picture, not the placeholder');
   assert.equal(items[1].embed, 'https://rule34video.com/embed/4440929');
+});
+
+test('X: Nitter /pic/ addresses in every form (plain, host, https, orig, base64)', async () => {
+  const { twimgUrl } = await import('../src/sources/x.js');
+  const b64 = s => Buffer.from(s).toString('base64url');
+  assert.equal(twimgUrl('/pic/media%2FHXabc.jpg'), 'https://pbs.twimg.com/media/HXabc.jpg');
+  assert.equal(twimgUrl('/pic/pbs.twimg.com%2Fprofile_images%2F1%2Fa_bigger.jpg'), 'https://pbs.twimg.com/profile_images/1/a_bigger.jpg');
+  assert.equal(twimgUrl('http://n.example/pic/https%3A%2F%2Fpbs.twimg.com%2Fmedia%2FX.jpg'), 'https://pbs.twimg.com/media/X.jpg');
+  assert.equal(twimgUrl('/pic/orig/media%2FX.jpg'), 'https://pbs.twimg.com/media/X.jpg');
+  assert.equal(twimgUrl(`/pic/enc/${b64('media/HXenc.jpg')}`), 'https://pbs.twimg.com/media/HXenc.jpg');
+  assert.equal(twimgUrl(`/pic/orig/enc/${b64('pbs.twimg.com/media/HXorig.jpg')}`), 'https://pbs.twimg.com/media/HXorig.jpg');
+  assert.equal(twimgUrl(`/pic/enc/${b64('amplify_video_thumb/1/img/t.jpg')}`), 'https://pbs.twimg.com/amplify_video_thumb/1/img/t.jpg');
+  assert.equal(twimgUrl('https://example.com/x.jpg'), null);
 });

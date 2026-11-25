@@ -1,6 +1,7 @@
 import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
-import { Sheet, Switch, SourceBadge, Thumb, cx } from './common.js';
+import { useXUserSuggestions, XUserRow } from './xusers.js';
+import { Sheet, Switch, SourceBadge, Thumb, Spinner, cx } from './common.js';
 import { state, closeSheet, openSheet, toast, notify, updateSettings } from '../state.js';
 import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl, modeOf, modeSources, xAppUrl } from '../config.js';
 import {
@@ -202,19 +203,37 @@ function XAccountsSheet() {
   const input = useRef(null);
   const user = name.trim().replace(/^@/, '');
   const valid = /^\w{1,15}$/.test(user);
-  const add = () => {
-    if (!valid) return;
+  // Accounts matching what is typed (name or @), to pick the right one.
+  const sug = useXUserSuggestions(name);
+  const follow = u => {
     haptic();
-    if (!isFollowing(user)) toggleFollow({ user });
+    if (!isFollowing(u.user)) toggleFollow({ user: u.user, name: u.name && u.name !== `@${u.user}` ? u.name : '', avatar: u.avatar || '' });
     setName('');
-    toast(`@${user} ajouté`);
+    toast(`@${u.user} suivi`);
   };
+  const add = () => {
+    const first = sug.users.find(u => u.user.toLowerCase() === user.toLowerCase()) || (valid ? { user } : sug.users[0]);
+    if (first) follow(first);
+  };
+  const exact = sug.users.some(u => u.user.toLowerCase() === user.toLowerCase());
+  const typing = user.length >= 2;
   return html`<${Sheet} title="Comptes X" onClose=${closeSheet} tall>${close => html`
     <form class="inline-form" onSubmit=${e => { e.preventDefault(); add(); }}>
-      <input ref=${input} type="text" placeholder="@nom du compte" value=${name} onInput=${e => setName(e.currentTarget.value)}
-        autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="16" />
-      <button type="submit" class="btn small" disabled=${!valid}>Suivre</button>
+      <input ref=${input} type="text" placeholder="Nom ou @ du compte" value=${name} onInput=${e => setName(e.currentTarget.value)}
+        autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="50" enterkeyhint="search" />
+      <button type="submit" class="btn small" disabled=${!valid && !sug.users.length}>Suivre</button>
     </form>
+    ${typing && html`<div class="xusers">
+      ${sug.users.map(u => html`<${XUserRow} key=${u.user} u=${u} onPick=${follow}
+        action=${isFollowing(u.user)
+          ? html`<span class="followed"><${Icon} name="check" size=${14} stroke=${3} />Suivi</span>`
+          : html`<button type="button" class="btn small" onClick=${() => follow(u)}>Suivre</button>`} />`)}
+      ${sug.loading && !sug.users.length ? html`<div class="xusers-note"><${Spinner} size=${16} /> Recherche des comptes…</div>` : null}
+      ${!sug.loading && !sug.users.length && !sug.error ? html`<div class="xusers-note">Aucun compte trouvé pour « ${user} ».</div>` : null}
+      ${sug.error ? html`<div class="xusers-note">Suggestions indisponibles pour le moment : tape le @ exact du compte.</div>` : null}
+      ${valid && !exact && !sug.loading ? html`<${XUserRow} u=${{ user, name: `@${user}` }} onPick=${follow}
+        action=${html`<button type="button" class="btn small ghost" onClick=${() => follow({ user })}>Ajouter</button>`} />` : null}
+    </div>`}
     <div class="options">
       ${state.xFollows.map(f => html`<div class="option static" key=${f.user}>
         <span class="xavatar small">${f.avatar ? html`<${Thumb} src=${f.avatar} />` : html`<${Icon} name="user" size=${16} />`}</span>

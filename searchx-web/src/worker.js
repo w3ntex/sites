@@ -6,6 +6,7 @@
 //   GET /api/suggest?q=<text>            Rule34 tag autocomplete
 //   GET /api/dl?url=<direct media>&name= download passthrough (whitelisted media hosts)
 //   GET /api/xvideo?user=<name>&id=<post>  direct file of an X video (read from a Nitter mirror)
+//   GET /api/xusers?q=<text>              X accounts matching the text (to pick one to follow)
 //   GET /api/spotify/callback | /api/spotify/poll   Spotify sign-in hand-over (see spotify.js)
 
 import { friendlyMessage, UpstreamError, MOBILE_UA } from './lib.js';
@@ -27,7 +28,7 @@ import { SpotifyHandoff, handleSpotifyCallback, handleSpotifyPoll } from './spot
 // Durable Object class used by the Spotify sign-in hand-over (wrangler.jsonc → durable_objects).
 export { SpotifyHandoff };
 
-export const VERSION = '2.7.4';
+export const VERSION = '2.7.5';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).
@@ -179,6 +180,19 @@ async function handleXVideo(url, ctx) {
   });
 }
 
+async function handleXUsers(url, ctx) {
+  const q = (url.searchParams.get('q') || '').trim().replace(/^@/, '').slice(0, 50);
+  if (q.length < 2) return json({ ok: true, users: [] });
+  return cached(null, `https://cache.searchx/xusers/${encodeURIComponent(q.toLowerCase())}`, ctx, async () => {
+    try {
+      const users = await x.searchUsers(q);
+      return json({ ok: true, users }, 200, { 'X-SX-Cacheable': users.length ? '1' : '0' });
+    } catch (e) {
+      return json({ ok: false, error: friendlyMessage(e), debug: String(e?.debug || '').slice(0, 300) }, 502);
+    }
+  });
+}
+
 async function handleApi(request, url, env, ctx) {
   if (request.method !== 'GET') return json({ ok: false, error: 'Méthode non autorisée.' }, 405);
   const sentKey = request.headers.get('x-sx-key') || url.searchParams.get('k');
@@ -193,6 +207,7 @@ async function handleApi(request, url, env, ctx) {
     case '/api/suggest': return handleSuggest(url);
     case '/api/dl': return handleDownload(url);
     case '/api/xvideo': return handleXVideo(url, ctx);
+    case '/api/xusers': return handleXUsers(url, ctx);
     case '/api/spotify/callback': return handleSpotifyCallback(url, env);
     case '/api/spotify/poll': return handleSpotifyPoll(url, env);
     default: return json({ ok: false, error: 'Introuvable.' }, 404);

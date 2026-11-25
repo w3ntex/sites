@@ -65,6 +65,7 @@ const P = {
   phone: '<rect x="6.5" y="2" width="11" height="20" rx="2.6"/><path d="M11 18.5h2"/>',
   queue: '<path d="M3 6h13M3 12h13M3 18h8"/><path d="M17 15v6l4.5-3z" fill="currentColor"/>',
   back: '<path d="M15 18l-6-6 6-6"/>',
+  verified: '<path fill="currentColor" stroke="none" d="M12 1.8l2.5 1.9 3.1-.2.9 3 2.6 1.8-1 3 1 2.9-2.6 1.8-.9 3-3.1-.2L12 22.2l-2.5-1.9-3.1.2-.9-3-2.6-1.8 1-2.9-1-3 2.6-1.8.9-3 3.1.2z"/><path d="m8.4 12.2 2.4 2.4 4.9-5" stroke="#fff" stroke-width="2.2"/>',
   clipboard: '<rect x="8" y="2.5" width="8" height="4" rx="1"/><path d="M16 4.5h1.5A1.5 1.5 0 0 1 19 6v14a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V6a1.5 1.5 0 0 1 1.5-1.5H8"/>',
   pause: '<rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/>',
   expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',

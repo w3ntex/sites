@@ -298,6 +298,12 @@ export async function searchSource(src, input, signal) {
 
 const xVideos = new Map();
 
+/** X accounts matching the typed text (Nitter's account search, through the server). */
+export async function searchXUsers(q, signal) {
+  const body = await getJSON(`api/xusers?q=${encodeURIComponent(String(q || '').trim().replace(/^@/, ''))}`, withTimeout(signal, 12000));
+  return Array.isArray(body.users) ? body.users : [];
+}
+
 /** Direct file of an X video (read from the post page by the server, then cached). */
 export async function xVideoUrl(item, signal) {
   if (xVideos.has(item.id)) return xVideos.get(item.id);

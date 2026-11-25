@@ -19,6 +19,7 @@ import { applyTheme } from '../lib/theme.js';
 import { openViewer } from './viewer.js';
 import { Petals, isNeon } from './theme.js';
 import { RelaySheet } from './relay.js';
+import { useXUserSuggestions, XAvatar } from './xusers.js';
 import { MORE_RESULTS_SOURCES } from '../shared/apis.js';
 import { enableSource } from '../search.js';
 
@@ -57,6 +58,8 @@ function SearchField({ focused, setFocused }) {
   const [tags, setTags] = useState([]);
   const input = useRef(null);
   const hentai = modeOf(state.settings) === 'hentai';
+  // "@…" in porn mode: X accounts matching what is typed, to pick the right one.
+  const xs = useXUserSuggestions(text, focused && !hentai && text.trim().startsWith('@'));
 
   useEffect(() => { setText(state.search.query); }, [state.search.query]);
 
@@ -88,7 +91,8 @@ function SearchField({ focused, setFocused }) {
   const popular = q ? [...new Set(pool)].filter(p => p.startsWith(q) && !recent.some(r => r.toLowerCase() === p)).slice(0, 4) : [];
   const follows = !hentai && q.startsWith('@')
     ? state.xFollows.filter(f => `@${f.user.toLowerCase()}`.startsWith(q)).slice(0, 5) : [];
-  const showPanel = focused && (recent.length || popular.length || tags.length || follows.length);
+  const xusers = xs.users.filter(u => !follows.some(f => f.user.toLowerCase() === u.user.toLowerCase())).slice(0, 8);
+  const showPanel = focused && (recent.length || popular.length || tags.length || follows.length || xusers.length || xs.loading);
 
   return html`<div class="search-wrap">
     <form class=${cx('search-field', focused && 'focused')} onSubmit=${e => { e.preventDefault(); submit(); }} role="search">
@@ -106,6 +110,12 @@ function SearchField({ focused, setFocused }) {
     ${showPanel ? html`<div class="suggest" onPointerDown=${e => e.preventDefault()}>
       ${follows.map(f => html`<button type="button" class="sug" key=${`f-${f.user}`} onClick=${() => submit(`@${f.user}`)}>
         <${Icon} name="at" size=${16} /><span>@${f.user}</span><em>Compte suivi</em></button>`)}
+      ${xusers.length ? html`<div class="sug-head">Comptes X</div>` : null}
+      ${xusers.map(u => html`<button type="button" class="sug xsug" key=${`x-${u.user}`} onClick=${() => submit(`@${u.user}`)}>
+        <${XAvatar} u=${u} size="tiny" />
+        <span class="xsug-text"><b>${u.name || u.user}${u.verified ? html`<${Icon} name="verified" size=${13} class="xverified" />` : null}</b><small>@${u.user}</small></span>
+      </button>`)}
+      ${xs.loading && !xusers.length ? html`<div class="sug-head">Recherche des comptes X…</div>` : null}
       ${recent.map(r => html`<button type="button" class="sug" key=${`r-${r}`} onClick=${() => submit(r)}>
         <${Icon} name="clock" size=${16} /><span>${r}</span></button>`)}
       ${popular.map(p => html`<button type="button" class="sug" key=${`p-${p}`} onClick=${() => submit(p)}>

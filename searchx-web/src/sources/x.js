@@ -20,15 +20,28 @@ export function accountOf(q) {
   return m ? m[1] : null;
 }
 
-/** Nitter "/pic/…" proxy URL → the original X CDN URL. */
+/**
+ * Nitter "/pic/…" proxy URL → the original X CDN URL. Mirrors write it several ways:
+ * /pic/media%2Fx.jpg, /pic/pbs.twimg.com%2Fprofile_images%2F…, /pic/https%3A%2F%2F…,
+ * /pic/orig/…, and base64 on mirrors with "base64Media" on: /pic/enc/cGJzLnR3aW1n…
+ */
 export function twimgUrl(u) {
   if (!u) return null;
   let s = decodeEntities(String(u));
   const i = s.indexOf('/pic/');
   if (i < 0) return /^https:\/\/(pbs|video)\.twimg\.com\//.test(s) ? s : null;
-  s = decodeURIComponent(s.slice(i + 5)).replace(/^orig\//, '');
+  s = s.slice(i + 5).replace(/^orig\//, '');
+  if (s.startsWith('enc/')) {
+    try {
+      const b = s.slice(4).split(/[?#]/)[0].replace(/-/g, '+').replace(/_/g, '/');
+      s = atob(b + '==='.slice((b.length + 3) % 4));
+    } catch { return null; }
+  } else {
+    try { s = decodeURIComponent(s); } catch { /* keep */ }
+  }
+  s = s.replace(/^orig\//, '');
   if (/^https?:\/\//.test(s)) return s.replace(/^http:/, 'https:');
-  if (s.startsWith('video.twimg.com/')) return `https://${s}`;
+  if (/^(pbs|video)\.twimg\.com\//.test(s)) return `https://${s}`;
   return `https://pbs.twimg.com/${s.replace(/^\/+/, '')}`;
 }
 
@@ -156,6 +169,36 @@ export async function search({ q, page, cursor = '' }) {
   }
   if (next === cursor) next = '';
   return { items, more: Boolean(next) && items.length > 0, cursor: next || null, profile: account ? (profile || { user: account }) : null };
+}
+
+/**
+ * Nitter's account search (/search?f=users) → [{ user, name, avatar, verified, locked, bio }].
+ * Each result is a "timeline-item" with data-username, a "fullname" link (title = the plain name),
+ * a "username" link and the avatar through Nitter's /pic/ proxy.
+ */
+export function parseNitterUsers(html) {
+  const out = [];
+  const seen = new Set();
+  for (const block of String(html || '').split(/<div\s+class="timeline-item\b/).slice(1)) {
+    const user = (/data-username="([A-Za-z0-9_]{1,15})"/.exec(block) || /class="username"[^>]*>\s*@?([A-Za-z0-9_]{1,15})\s*</.exec(block) || [])[1];
+    if (!user || seen.has(user.toLowerCase())) continue;
+    seen.add(user.toLowerCase());
+    const nameTag = (/<a\b[^>]*class="fullname"[^>]*>/.exec(block) || [])[0] || '';
+    const name = decodeEntities((/\btitle="([^"]*)"/.exec(nameTag) || [])[1] || stripTags((/class="fullname"[^>]*>([\s\S]*?)<\/a>/.exec(block) || [])[1] || '')).trim();
+    const img = (/<img\b[^>]*class="avatar[^"]*"[^>]*>/.exec(block) || /<a\b[^>]*class="tweet-avatar"[^>]*>\s*<img\b[^>]*>/.exec(block) || [])[0] || '';
+    const avatar = twimgUrl((/\bsrc="([^"]+)"/.exec(img) || [])[1]);
+    const bio = stripTags(decodeEntities((/class="tweet-content[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(block) || [])[1] || '')).replace(/\s+/g, ' ').trim().slice(0, 160);
+    out.push({ user, name: name || user, avatar, verified: /verified-icon|icon-ok/.test(nameTag + block.slice(0, 2000)), locked: /icon-lock/.test(block), bio });
+  }
+  return out;
+}
+
+/** Accounts whose name or @ matches the typed text (most relevant first, as X ranks them). */
+export async function searchUsers(q) {
+  const text = String(q || '').trim().replace(/^@/, '').slice(0, 50);
+  if (text.length < 2) return [];
+  const { text: html } = await nitter(`/search?${new URLSearchParams({ f: 'users', q: text })}`, t => /class="timeline/.test(t) || /No items found/i.test(t), { emptyOn404: true });
+  return parseNitterUsers(html).slice(0, 12);
 }
 
 /** Direct file of a video post (for /api/xvideo). */
