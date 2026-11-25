@@ -27,7 +27,7 @@ import { SpotifyHandoff, handleSpotifyCallback, handleSpotifyPoll } from './spot
 // Durable Object class used by the Spotify sign-in hand-over (wrangler.jsonc → durable_objects).
 export { SpotifyHandoff };
 
-export const VERSION = '2.7.1';
+export const VERSION = '2.7.2';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).
@@ -103,7 +103,7 @@ async function handleSearch(request, url, env, ctx) {
     media: pick(params.get('media'), MEDIA, 'all'),
     dur: pick(params.get('dur'), DURS, 'any'),
     hd: pick(params.get('hd'), QUALITIES, 'any'),
-    cursor: (params.get('cursor') || '').slice(0, 300),
+    cursor: (params.get('cursor') || '').slice(0, 1000),
     scope,
     env,
     request

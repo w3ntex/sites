@@ -1,9 +1,11 @@
 import { upstream, UpstreamError, DESKTOP_UA, decodeEntities, stripTags } from '../lib.js';
 
 // X (Twitter) through Nitter mirrors (X itself needs a logged-in account). Two kinds of queries:
-//   "@name"  → that account's latest photos and videos (works well)
+//   "@name"  → that account's photos and videos, page after page (works well)
 //   words    → X's media search, which hides most adult posts from logged-out readers
 // Media files come straight from X's CDN (pbs.twimg.com / video.twimg.com), which the phone can load.
+// A Nitter RSS feed holds 20 posts; the next ones come with the cursor Nitter sends in its Min-Id
+// header (…/rss?cursor=…), or failing that in the "Load more" link of the HTML page.
 
 export const NITTER_INSTANCES = ['nitter.mie.foundation', 'nitter.tiekoetter.com', 'nitter.privacyredirect.com', 'nitter.catsarch.com'];
 let preferred = null; // last instance that answered, for this isolate
@@ -97,9 +99,9 @@ export function pickTwitterVideo(html) {
   return m3u8 ? { url: m3u8, hls: true } : null;
 }
 
-/** GET a path on the first Nitter mirror that answers with the expected content. */
-async function nitter(path, check, { emptyOn404 = false } = {}) {
-  const order = preferred ? [preferred, ...NITTER_INSTANCES.filter(h => h !== preferred)] : NITTER_INSTANCES;
+/** GET a path on the first Nitter mirror that answers with the expected content → { text, minId, host }. */
+async function nitter(path, check, { emptyOn404 = false, hosts = null } = {}) {
+  const order = hosts || (preferred ? [preferred, ...NITTER_INSTANCES.filter(h => h !== preferred)] : NITTER_INSTANCES);
   const failures = [];
   for (const host of order) {
     try {
@@ -110,12 +112,12 @@ async function nitter(path, check, { emptyOn404 = false } = {}) {
         continue;
       }
       preferred = host;
-      return text;
+      return { text, minId: (res.headers?.get?.('min-id') || '').trim(), host };
     } catch (e) {
       failures.push(`${host}: ${e.status || e.kind || e.message}`);
       if (e instanceof UpstreamError && e.status === 404) {
         // Nitter answers 404 for an unknown account, and for a search without any result.
-        if (emptyOn404) { preferred = host; return ''; }
+        if (emptyOn404) { preferred = host; return { text: '', minId: '', host }; }
         if (path.includes('/media/rss')) throw new UpstreamError('unexpected', 404, "Ce compte X n'existe pas (ou est suspendu).", failures.join(' | '));
       }
     }
@@ -123,23 +125,43 @@ async function nitter(path, check, { emptyOn404 = false } = {}) {
   throw new UpstreamError('blocked', 0, "Aucun miroir de X (Nitter) ne répond au serveur pour le moment. X n'est lisible que via ces miroirs bénévoles.", failures.join(' | ').slice(0, 300));
 }
 
+/** Cursor of the "Load more" link of a Nitter HTML timeline (fallback when the RSS has no Min-Id). */
+export function nitterShowMoreCursor(html) {
+  const m = /class="show-more"[^>]*>\s*<a[^>]*\bhref="[^"]*?[?&]cursor=([^"&]+)/i.exec(String(html || ''));
+  if (!m) return '';
+  try { return decodeURIComponent(decodeEntities(m[1])); } catch { return decodeEntities(m[1]); }
+}
+
 const isRss = text => /<rss[\s>]/.test(text) && /<channel>/.test(text);
 
-export async function search({ q, page }) {
-  if (page > 1) return { items: [], more: false }; // RSS feeds have a single page
+function withCursor(path, cursor) {
+  return cursor ? `${path}${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}` : path;
+}
+
+export async function search({ q, page, cursor = '' }) {
+  if (page > 1 && !cursor) return { items: [], more: false };
   const account = accountOf(q);
-  const path = account
-    ? `/${encodeURIComponent(account)}/media/rss`
-    : `/search/rss?${new URLSearchParams({ f: 'media', q })}`;
-  const xml = await nitter(path, isRss, { emptyOn404: !account });
-  const { items, profile } = parseNitterRss(xml);
-  return { items, more: false, profile: account ? (profile || { user: account }) : null };
+  const html = account ? `/${encodeURIComponent(account)}/media` : `/search?${new URLSearchParams({ f: 'media', q })}`;
+  const rss = account ? `${html}/rss` : `/search/rss?${new URLSearchParams({ f: 'media', q })}`;
+  // Past the first page an empty answer is the end of the timeline, not an unknown account.
+  const got = await nitter(withCursor(rss, cursor), isRss, { emptyOn404: !account || page > 1 });
+  const { items, profile } = parseNitterRss(got.text);
+  let next = got.minId;
+  if (!next && items.length) {
+    // Some mirrors drop the Min-Id header: the HTML timeline's "Load more" link has the same cursor.
+    try {
+      const page_ = await nitter(withCursor(html, cursor), t => /class="timeline/.test(t), { hosts: [got.host] });
+      next = nitterShowMoreCursor(page_.text);
+    } catch { next = ''; }
+  }
+  if (next === cursor) next = '';
+  return { items, more: Boolean(next) && items.length > 0, cursor: next || null, profile: account ? (profile || { user: account }) : null };
 }
 
 /** Direct file of a video post (for /api/xvideo). */
 export async function videoUrl(user, id) {
   if (!/^[A-Za-z0-9_]{1,15}$/.test(user || '') || !/^\d{5,25}$/.test(id || '')) throw new UpstreamError('http', 400, 'Lien de publication invalide.');
-  const html = await nitter(`/${user}/status/${id}`, t => /video\.twimg\.com|<video/.test(t));
+  const { text: html } = await nitter(`/${user}/status/${id}`, t => /video\.twimg\.com|<video/.test(t));
   const v = pickTwitterVideo(html);
   if (!v) throw new UpstreamError('unexpected', 200, 'Vidéo introuvable sur cette publication.');
   return v;

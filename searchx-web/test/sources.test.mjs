@@ -73,6 +73,33 @@ test('X: account media feed, search, and media addresses', async () => {
   assert.match(missing.body.error, /n'existe pas/);
 });
 
+test('X: an account keeps going page after page (Nitter Min-Id cursor)', async () => {
+  const p1 = await api('/api/search?src=x&q=%40pagedcreator&fresh=1');
+  assert.equal(p1.status, 200, JSON.stringify(p1.body));
+  assert.equal(p1.body.more, true);
+  assert.equal(p1.body.cursor, 'p2');
+  const p2 = await api(`/api/search?src=x&q=%40pagedcreator&page=2&cursor=${p1.body.cursor}&fresh=1`);
+  assert.equal(p2.status, 200, JSON.stringify(p2.body));
+  assert.equal(p2.body.cursor, 'p3');
+  const ids1 = new Set(p1.body.items.map(i => i.id));
+  assert.ok(p2.body.items.length > 0 && p2.body.items.every(i => !ids1.has(i.id)), 'new posts on page 2');
+  const p3 = await api(`/api/search?src=x&q=%40pagedcreator&page=3&cursor=${p2.body.cursor}&fresh=1`);
+  assert.equal(p3.body.more, false, 'last page');
+  assert.equal(p3.body.cursor, null);
+  const s2 = await api('/api/search?src=x&q=sunset&page=2&cursor=p2&fresh=1');
+  assert.equal(s2.status, 200);
+  assert.ok(s2.body.items.length > 0, 'keyword searches page too');
+  const none = await api('/api/search?src=x&q=%40pagedcreator&page=2&fresh=1');
+  assert.deepEqual(none.body.items, [], 'no cursor: no next page');
+});
+
+test('X: "Load more" cursor of a Nitter HTML timeline', async () => {
+  const { nitterShowMoreCursor } = await import('../src/sources/x.js');
+  const html = '<div class="timeline"><div class="timeline-item">…</div><div class="show-more"><a href="?cursor=DAABCgABG%2Bx_y-z">Load more</a></div></div>';
+  assert.equal(nitterShowMoreCursor(html), 'DAABCgABG+x_y-z');
+  assert.equal(nitterShowMoreCursor('<div class="timeline"></div>'), '');
+});
+
 test('X: video address from a post page, best mp4 first', async () => {
   const v = pickTwitterVideo(F.nitterStatusHtml('2100000000000000001'));
   assert.equal(v.hls, false);

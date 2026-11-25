@@ -17,6 +17,11 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.2:** X accounts (and X searches) are no longer cut at the first 20 posts.
+* Nitter's RSS feeds are read page after page with the cursor Nitter sends in its `Min-Id` header (`…/rss?cursor=…`).
+* If a mirror drops that header, the cursor comes from the "Load more" link of the HTML timeline.
+* Three pages load at once, then the rest as you scroll.
+
 **v2.7.1 (fixes):**
 * **Hstream and Rule34Video work again.** Both sites changed their markup: attributes on their own lines, double spaces, lazy images. The parsers now accept any spacing and attribute order, and Rule34Video results also get views and rating.
 * **Danbooru no longer loads forever.**

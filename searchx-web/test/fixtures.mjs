@@ -168,11 +168,12 @@ export function redditJSON(n = 25, base = '', after = 't3_next') {
 export const NITTER = 'nitter.mie.foundation';
 
 /** Nitter RSS: photos, videos, X "GIFs" and a two-photo post (search or account media feed). */
-export function nitterRss({ account = null, n = 8, q = 'sample' } = {}) {
+export function nitterRss({ account = null, n = 8, q = 'sample', start = 0 } = {}) {
   const title = account ? `Sample Creator / @${account}` : `Search results for "${q}"`;
   const image = account ? `<image><title>${title}</title><link>http://${NITTER}/${account}</link><url>http://${NITTER}/pic/https%3A%2F%2Fpbs.twimg.com%2Fprofile_images%2F111%2Favatar_400x400.jpg</url><width>128</width><height>128</height></image>` : '';
   let items = '';
-  for (let i = 0; i < n; i++) {
+  for (let k = 0; k < n; k++) {
+    const i = start + k;
     const user = account || `creator${i % 3}`;
     const id = 2100000000000000000n + BigInt(i);
     const kind = i % 4;
@@ -315,9 +316,14 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
     if (host === NITTER || host.startsWith('nitter.')) {
       if (failing('x') || host !== NITTER) return text('<html><head><title>Attention Required! | Cloudflare</title></head></html>', 403);
       const path = url.pathname;
-      if (path === '/search/rss') return new Response(nitterRss({ q: url.searchParams.get('q') || '', n: 8 }), { headers: { 'content-type': 'application/rss+xml' } });
+      // Pages: no cursor → 1st page (Min-Id: p2), cursor p2 → 2nd page (Min-Id: p3), p3 → last page (no Min-Id).
+      const cur = url.searchParams.get('cursor') || '';
+      const pg = cur === 'p2' ? 2 : cur === 'p3' ? 3 : 1;
+      const rssPage = (opts, n) => new Response(nitterRss({ ...opts, n: pg === 3 ? Math.ceil(n / 2) : n, start: (pg - 1) * n }),
+        { headers: { 'content-type': 'application/rss+xml', ...(pg < 3 ? { 'min-id': `p${pg + 1}` } : {}) } });
+      if (path === '/search/rss') return rssPage({ q: url.searchParams.get('q') || '' }, 8);
       const acc = /^\/([A-Za-z0-9_]+)\/media\/rss$/.exec(path);
-      if (acc) return acc[1] === 'nobody' ? text('User not found', 404) : new Response(nitterRss({ account: acc[1], n: 12 }), { headers: { 'content-type': 'application/rss+xml' } });
+      if (acc) return acc[1] === 'nobody' ? text('User not found', 404) : rssPage({ account: acc[1] }, 12);
       const st = /^\/[A-Za-z0-9_]+\/status\/(\d+)$/.exec(path);
       if (st) return text(nitterStatusHtml(st[1]));
       return text('not found', 404);
