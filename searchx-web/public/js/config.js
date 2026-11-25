@@ -1,6 +1,6 @@
 import { HENTAI_SUBREDDITS } from './shared/reddit.js';
 
-export const APP_VERSION = '2.5.3';
+export const APP_VERSION = '2.5.4';
 
 // ---- modes ---------------------------------------------------------------------------------------
 // Two separate apps in one: each mode has its own sources (shown one site at a time, never mixed)
@@ -80,6 +80,12 @@ export const PORN_CATEGORIES = [
   { q: 'blowjob', fr: 'Fellation' }, { q: 'anal', fr: 'Anal' }, { q: 'cosplay', fr: 'Cosplay' }, { q: 'squirt', fr: 'Squirt' }
 ];
 
+/** RedGIFs' own search page (the route its website uses), shown inside the app without a relay. */
+export function redgifsSitePage(query, { mode = 'porn', media = 'all' } = {}) {
+  const words = String(query || '').trim() + (mode === 'hentai' && !/\bhentai\b/i.test(query) ? ' hentai' : '');
+  return `https://www.redgifs.com/search/${media === 'image' ? 'images' : 'gifs'}?query=${encodeURIComponent(words)}`;
+}
+
 /** The site's own search page for a query (when a source can't be searched from here). */
 export function siteSearchUrl(src, query, { mode = 'porn' } = {}) {
   const q = String(query || '').trim();
@@ -92,7 +98,7 @@ export function siteSearchUrl(src, query, { mode = 'porn' } = {}) {
     case 'redtube': return `https://www.redtube.com/?search=${e}`;
     case 'eporner': return `https://www.eporner.com/search/${dashed}/`;
     case 'rule34': return `https://rule34.xxx/index.php?page=post&s=list&tags=${tags}`;
-    case 'redgifs': return mode === 'hentai' ? `https://www.redgifs.com/search/gifs?query=${e}&tags=Hentai` : `https://www.redgifs.com/search/gifs?query=${e}`;
+    case 'redgifs': return redgifsSitePage(q, { mode });
     case 'reddit': return mode === 'hentai'
       ? `https://www.reddit.com/r/${HENTAI_SUBREDDITS.join('+')}/search/?q=${e}&restrict_sr=1&include_over_18=1`
       : `https://www.reddit.com/search/?q=${e}&include_over_18=1`;

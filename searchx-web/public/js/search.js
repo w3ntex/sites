@@ -138,6 +138,8 @@ async function fetchOne(g, src, page, fresh = false) {
     per.tags = res.tags || per.tags;
     per.profile = res.profile || per.profile;
     per.via = res.via || per.via;
+    per.embed = Boolean(res.embed);
+    per.relayError = res.relayError || '';
     per.state = 'done';
     per.error = null;
   } catch (e) {
@@ -169,12 +171,12 @@ function autoTab() {
   const S = state.search;
   if (S.tabChosen) return;
   const per = S.per[S.tab];
-  if (per && (per.state === 'loading' || per.items.length)) return;
+  if (per && (per.state === 'loading' || per.items.length || per.embed)) return;
   for (const src of activeSources()) {
     const p = S.per[src];
     if (!p) continue;
     if (p.state === 'loading') return; // wait: an earlier tab may still answer
-    if (p.items.length) { S.tab = src; return; }
+    if (p.items.length || p.embed) { S.tab = src; return; }
   }
 }
 

@@ -5,7 +5,7 @@ import { Grid, SkeletonGrid, Strip } from './grid.js';
 import { state, notify, emptySearch, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
 import {
   SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, LAYOUTS, MODES, HENTAI_CATEGORIES, PORN_CATEGORIES,
-  siteSearchUrl, modeOf
+  siteSearchUrl, modeOf, redgifsSitePage
 } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
@@ -26,7 +26,7 @@ import { enableSource } from '../search.js';
 function MoreResults() {
   const S = state.search;
   if (modeOf(state.settings) !== 'porn' || !S.query || S.loading || /^@/.test(S.query)) return null;
-  const total = activeSources().reduce((n, s) => n + (S.per[s]?.items.length || 0), 0);
+  const total = activeSources().reduce((n, s) => n + (S.per[s]?.embed ? 80 : (S.per[s]?.items.length || 0)), 0);
   const offer = MORE_RESULTS_SOURCES.filter(s => !state.filters.sources.includes(s));
   if (total >= 60 || !offer.length) return null;
   return html`<div class="more-results">
@@ -145,6 +145,7 @@ function SourceTabs() {
         <span>${SOURCES[src].name}</span>
         ${p.state === 'loading' ? html`<${Spinner} size=${11} />`
           : p.state === 'error' ? html`<${Icon} name="warn" size=${13} class="warn" />`
+          : p.embed ? html`<${Icon} name="external" size=${12} />`
           : html`<em>${p.items.length}${p.more ? '+' : ''}</em>`}
       </button>`;
     })}
@@ -163,7 +164,7 @@ function ResultsToolbar() {
   const tags = per?.tags;
   const showTags = tags && tags.length && tags.join(' ') !== (S.sent || S.query).toLowerCase().replace(/\s+/g, '_');
   const translated = S.sent && S.sent !== S.query.trim().toLowerCase() ? S.sent : null;
-  if (!per || per.state === 'error' || (!S.results.length && per.state !== 'done')) return null;
+  if (!per || per.embed || per.state === 'error' || (!S.results.length && per.state !== 'done')) return null;
   const notes = [
     translated && `cherché en anglais : « ${translated} »`,
     showTags && `tags : ${tags.join(', ').replace(/_/g, ' ')}`,
@@ -204,6 +205,25 @@ function XHint() {
       Pour du volume : un compte précis (<b>@nom</b>), ou l'onglet RedGIFs.</p>
     ${follows.length ? html`<div class="chips scroll-x">${follows.map(f => html`<button type="button" key=${f.user} class="chip small"
       onClick=${() => { haptic(); runSearch(`@${f.user}`); }}><${Icon} name="at" size=${12} />${f.user}</button>`)}</div>` : null}
+  </div>`;
+}
+
+/** RedGIFs' own search, loaded by the phone inside the app (no relay needed, no server limit). */
+function RedgifsEmbed({ per }) {
+  const S = state.search;
+  const mode = modeOf(state.settings);
+  const src = redgifsSitePage(S.sent || S.query, { mode, media: state.filters.media });
+  const relay = state.settings.rgRelay;
+  return html`<div class="rg-embed">
+    <div class="rg-embed-bar">
+      <span><${Icon} name="info" size=${14} /> ${per.relayError ? 'Relais indisponible : résultats' : 'Résultats'} de redgifs.com, chargés par ton iPhone.
+        Touche « Enter » la première fois.</span>
+      <button type="button" class="text-btn" onClick=${() => { haptic(); openSheet('custom', { render: () => html`<${RelaySheet} />` }); }}>
+        ${relay ? 'Relais' : 'Grille SearchX'}</button>
+    </div>
+    <iframe key=${src} src=${src} title="RedGIFs" referrerpolicy="no-referrer"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowFullScreen=${true}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"></iframe>
   </div>`;
 }
 
@@ -254,6 +274,7 @@ function Results() {
   const account = isX && /^@\w{1,15}$/.test(S.query);
   const head = isX ? (account ? html`<${XProfile} profile=${per.profile} query=${S.query} />` : html`<${XHint} />`) : null;
 
+  if (per.embed && per.state === 'done') return html`<${RedgifsEmbed} per=${per} />`;
   if (per.state === 'error' && per.error === REFUSED_MESSAGE) {
     return html`${head}<${EmptyState} icon="shield" title=${`Refusé sur ${SOURCES[src].name}`}
       text=${`${SOURCES[src].name} n'est pas vérifié comme les sites pro : les mots qui peuvent viser des mineurs y sont refusés. Les autres onglets restent disponibles.`} />`;

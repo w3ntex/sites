@@ -268,12 +268,16 @@ export async function searchSource(src, input, signal) {
   const params = { ...input, q: String(input.q || '').trim(), scope: hentai && (src === 'redgifs' || src === 'reddit') ? 'hentai' : '' };
 
   let directError = null;
-  if (src === 'redgifs' && state.settings.rgRelay) {
+  if (src === 'redgifs') {
+    // RedGIFs limits Cloudflare's servers (429) and only lets its own site call its API from a
+    // browser. With the relay: results in the grid. Without it (or if it fails): RedGIFs' own
+    // search page, shown inside the app and loaded by the phone itself.
+    if (!state.settings.rgRelay) return { ok: true, src, items: [], more: false, embed: true, via: 'embed' };
     try {
       return finish(src, await redgifsRelay(params, signal), 'relay', drawn);
     } catch (e) {
       if (signal?.aborted) throw e;
-      directError = e; // then the Cloudflare server, which RedGIFs often limits
+      return { ok: true, src, items: [], more: false, embed: true, via: 'embed', relayError: e.message };
     }
   }
   const fn = DIRECT[src];

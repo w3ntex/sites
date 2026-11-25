@@ -30,8 +30,9 @@ export function RelaySheet() {
     }
   };
   return html`<${Sheet} title="Relais RedGIFs" onClose=${closeSheet} tall>${close => html`
-    <p class="sheet-text">RedGIFs limite les serveurs Cloudflare (où tourne SearchX) et n'accepte pas les appels directs d'une app web.
-      La solution : un petit <b>relais gratuit chez Vercel</b>, déjà prêt dans ton dépôt GitHub. Tout se fait depuis l'iPhone :</p>
+    <p class="sheet-text">Sans relais, l'onglet RedGIFs affiche le site redgifs.com dans l'app (ça marche déjà).
+      Avec le relais, les résultats RedGIFs arrivent dans la grille SearchX (favoris, historique, filtres, lecteur plein écran).
+      Le relais est un petit service <b>gratuit chez Vercel</b>, déjà prêt dans ton dépôt GitHub :</p>
     <ol class="steps">
       <li>Ouvre <a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer">vercel.com/new</a> et choisis <b>Continue with GitHub</b>.</li>
       <li>À côté du dépôt <b>sites</b>, touche <b>Import</b> (autorise Vercel à voir le dépôt si on te le demande).</li>

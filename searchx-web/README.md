@@ -17,6 +17,8 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.5.4:** Without a relay, the RedGIFs tab shows RedGIFs' own search page (`/search/gifs?query=`, the route its website uses) inside the app. The phone loads it itself, so the server's 429 limit doesn't apply. The relay is optional: it brings RedGIFs results into the SearchX grid (favorites, history, filters, viewer).
+
 **v2.5.2:** RedGIFs relay (see above). The "Ouvrir sur RedGIFs" link now uses the site's real search URL (`/search/gifs?query=`).
 
 **v2.5.1 (strict separation, exact keywords):**
