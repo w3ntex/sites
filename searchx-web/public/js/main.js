@@ -17,7 +17,16 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
 }
 
-// Tell the user when a newer version has been deployed.
+// A newer version has been deployed: load it right away (once per version), else offer it.
 health().then(h => {
-  if (h?.version && h.version !== APP_VERSION) { state.update = true; notify(); }
+  if (!h?.version || h.version === APP_VERSION) return;
+  let done = null;
+  try { done = sessionStorage.getItem('sx.updatedTo'); } catch { /* ignore */ }
+  if (done !== h.version && !state.search.query) {
+    try { sessionStorage.setItem('sx.updatedTo', h.version); } catch { /* ignore */ }
+    location.reload();
+    return;
+  }
+  state.update = true;
+  notify();
 }).catch(() => { /* server unreachable: searches will show it */ });

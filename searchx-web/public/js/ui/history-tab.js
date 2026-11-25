@@ -3,7 +3,8 @@ import { Icon } from './icons.js';
 import { EmptyState, Thumb, SwipeRow, SourceBadge } from './common.js';
 import { openViewer } from './viewer.js';
 import { state, openSheet } from '../state.js';
-import { deleteHistory, clearHistory, clearHistorySince } from '../library.js';
+import { deleteHistory, clearHistory, clearHistorySince, historyOf } from '../library.js';
+import { modeOf, MODES } from '../config.js';
 import { FilterField } from './library-tab.js';
 import { haptic } from '../lib/haptics.js';
 import { dayKey, dayLabel, time, duration, watched } from '../lib/format.js';
@@ -14,9 +15,11 @@ const CLEAR_OPTIONS = [['hour', 'La dernière heure'], ['day', "Aujourd'hui"], [
 export function HistoryTab() {
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
+  const mode = modeOf(state.settings);
+  const mine = historyOf(mode); // the other mode's history stays out of sight
   const entries = query
-    ? state.history.filter(e => `${e.item.title} ${(e.item.by || []).join(' ')} ${SOURCES[e.item.src]?.name || ''}`.toLowerCase().includes(query))
-    : state.history;
+    ? mine.filter(e => `${e.item.title} ${(e.item.by || []).join(' ')} ${SOURCES[e.item.src]?.name || ''}`.toLowerCase().includes(query))
+    : mine;
   const groups = [];
   let current = null;
   for (const e of entries) {
@@ -28,8 +31,8 @@ export function HistoryTab() {
     title: 'Effacer…', key: 'clearhist', value: null, options: CLEAR_OPTIONS,
     onPick: v => {
       if (v === 'all') setTimeout(() => openSheet('confirm', {
-        title: "Effacer tout l'historique ?", text: `${state.history.length} élément${state.history.length > 1 ? 's' : ''} seront supprimés. C'est définitif.`,
-        confirm: "Effacer l'historique", onConfirm: () => clearHistory()
+        title: `Effacer l'historique du mode ${MODES[mode].label.toLowerCase()} ?`, text: `${mine.length} élément${mine.length > 1 ? 's' : ''} seront supprimés. C'est définitif.`,
+        confirm: "Effacer l'historique", onConfirm: () => clearHistory(mode)
       }), 240);
       else {
         const since = v === 'hour' ? Date.now() - 3600 * 1000 : new Date().setHours(0, 0, 0, 0);
@@ -41,9 +44,9 @@ export function HistoryTab() {
     <header class="topbar plain">
       <div class="title-row">
         <h1 class="page-title" data-jp="履歴">Historique</h1>
-        ${state.history.length ? html`<button type="button" class="text-btn danger" onClick=${() => { haptic(); confirmClear(); }}>Effacer</button>` : null}
+        ${mine.length ? html`<button type="button" class="text-btn danger" onClick=${() => { haptic(); confirmClear(); }}>Effacer</button>` : null}
       </div>
-      ${state.history.length ? html`<${FilterField} value=${q} onInput=${setQ} placeholder="Chercher dans l'historique" />` : null}
+      ${mine.length ? html`<${FilterField} value=${q} onInput=${setQ} placeholder="Chercher dans l'historique" />` : null}
     </header>
     <main class="content">
       ${!entries.length ? html`<${EmptyState} icon="history" title=${query ? 'Aucun résultat' : 'Historique vide'}

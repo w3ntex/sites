@@ -7,6 +7,7 @@ import { SOURCES, SOURCE_ORDER, modeOf, modeSources } from './config.js';
 import { searchSource, REFUSED_MESSAGE } from './api.js';
 import { isQueryAllowed } from './shared/safety.js';
 import { save } from './lib/storage.js';
+import { fitsMode, translateQuery, keywords, matchesKeywords, KEYWORD_FILTERED, isHentaiQuery, forMode } from './modes.js';
 
 const SOURCE_TIMEOUT_MS = 35000;
 let generation = 0;
@@ -23,16 +24,24 @@ function abortAll() {
   controllers.clear();
 }
 
-function rememberRecent(q) {
-  const list = state.recent.filter(r => r.toLowerCase() !== q.toLowerCase());
-  list.unshift(q);
-  state.recent = list.slice(0, 30);
-  persist('recent');
+const mode = () => modeOf(state.settings);
+
+/** Recent searches of the current mode (each mode keeps its own). */
+export function recentList() {
+  return state.recents?.[mode()] || [];
 }
 
-export function clearRecent() {
-  state.recent = [];
-  persist('recent');
+function rememberRecent(q) {
+  const list = recentList().filter(r => r.toLowerCase() !== q.toLowerCase());
+  list.unshift(q);
+  state.recents = { ...state.recents, [mode()]: list.slice(0, 30) };
+  persist('recents');
+}
+
+/** all: both modes (Réglages); otherwise only the current mode's list. */
+export function clearRecent({ all = false } = {}) {
+  state.recents = all ? { porn: [], hentai: [] } : { ...state.recents, [mode()]: [] };
+  persist('recents');
   notify();
 }
 
@@ -47,6 +56,14 @@ export function runSearch(raw, { tab = null } = {}) {
   if (!allowed(q)) { start(q); return; } // shows the refusal, not remembered
   if (!activeSources().length) {
     toast('Aucune source activée pour ce type de média.');
+    return;
+  }
+  // Porn mode never shows hentai: "hentai", "anime"… are offered in hentai mode instead.
+  if (mode() === 'porn' && isHentaiQuery(q)) {
+    abortAll();
+    generation++;
+    state.search = { ...emptySearch(), query: q, redirect: 'hentai' };
+    notify();
     return;
   }
   rememberRecent(q);
@@ -67,6 +84,10 @@ function start(q, { fresh = false, tab = null, keepTab = false } = {}) {
   }
   const S = emptySearch();
   S.query = q;
+  S.mode = mode();
+  // Sites tag in English: common French words are searched in English.
+  S.sent = forMode(translateQuery(q), S.mode);
+  S.words = /^@\w+$/.test(q) ? [] : keywords(S.sent);
   S.loading = true;
   const sources = activeSources();
   for (const src of sources) S.per[src] = newPer();
@@ -99,15 +120,20 @@ async function fetchOne(g, src, page, fresh = false) {
   try {
     const f = state.filters;
     const res = await searchSource(src, {
-      q: S.query, page, sort: f.sort, media: f.media, dur: f.dur, hd: f.hd,
+      q: S.sent || S.query, page, sort: f.sort, media: f.media, dur: f.dur, hd: f.hd,
       cursor: page > 1 ? per.cursor : '', fresh
     }, ctrl.signal);
     if (g !== generation || state.search !== S) return;
     const known = new Set(per.items.map(i => i.id));
-    const added = (res.items || []).filter(i => i && i.id && !known.has(i.id));
+    const fresh_ = (res.items || []).filter(i => i && i.id && !known.has(i.id));
+    // Never mix the modes, and keep only what really matches the words where a site's search is loose.
+    const strictWords = KEYWORD_FILTERED.has(src) ? S.words : [];
+    const added = fresh_.filter(it => fitsMode(it, S.mode) && matchesKeywords(it, strictWords));
+    for (const it of added) it.mode = S.mode;
+    per.hidden = (per.hidden || 0) + (fresh_.length - added.length);
     per.items = per.items.concat(added);
     per.page = page;
-    per.more = Boolean(res.more) && added.length > 0;
+    per.more = Boolean(res.more) && fresh_.length > 0;
     per.cursor = res.cursor || null;
     per.tags = res.tags || per.tags;
     per.profile = res.profile || per.profile;
@@ -129,6 +155,10 @@ async function fetchOne(g, src, page, fresh = false) {
   autoTab();
   recompute();
   notify();
+  // Few results left after the checks: fetch the next page right away (twice at most).
+  if (per.state === 'done' && per.more && per.items.length < 12 && page < 3 && g === generation && state.search === S) {
+    fetchOne(g, src, page + 1);
+  }
 }
 
 /**

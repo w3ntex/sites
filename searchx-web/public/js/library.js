@@ -1,6 +1,10 @@
 // Favorites, playlists and history (stored on the phone, in this web app's storage).
 
 import { state, notify, persist, toast } from './state.js';
+import { itemMode } from './modes.js';
+import { modeOf } from './config.js';
+
+const currentMode = () => modeOf(state.settings);
 
 const MAX_HISTORY = 1500;
 
@@ -10,8 +14,28 @@ export function slim(it) {
     id: it.id, src: it.src, title: it.title, dur: it.dur ?? null, thumb: it.thumb, thumb2: it.thumb2 || null,
     url: it.url, type: it.type, media: it.media || null, full: it.full || null, embed: it.embed || null,
     h: it.h ?? null, views: it.views ?? null, likes: it.likes ?? null, rating: it.rating ?? null,
-    by: (it.by || []).slice(0, 4), tags: (it.tags || []).slice(0, 12)
+    by: (it.by || []).slice(0, 4), tags: (it.tags || []).slice(0, 12),
+    mode: itemMode(it), user: it.user || undefined, tweet: it.tweet || undefined
   };
+}
+
+// The two modes never share anything: each list only shows the current mode's items.
+export function favoritesOf(mode = currentMode()) {
+  return state.favorites.filter(it => itemMode(it) === mode);
+}
+
+export function historyOf(mode = currentMode()) {
+  return state.history.filter(e => itemMode(e.item) === mode);
+}
+
+export function playlistMode(p) {
+  if (p.mode === 'porn' || p.mode === 'hentai') return p.mode;
+  const n = p.items.filter(it => itemMode(it) === 'hentai').length;
+  return p.items.length && n > p.items.length / 2 ? 'hentai' : 'porn';
+}
+
+export function playlistsOf(mode = currentMode()) {
+  return state.playlists.filter(p => playlistMode(p) === mode);
 }
 
 // ---- favorites --------------------------------------------------------------------------------
@@ -43,7 +67,7 @@ function uid() {
 
 export function createPlaylist(name) {
   const clean = String(name || '').trim().slice(0, 60) || `Playlist ${state.playlists.length + 1}`;
-  const p = { id: uid(), name: clean, createdAt: Date.now(), items: [] };
+  const p = { id: uid(), name: clean, createdAt: Date.now(), items: [], mode: currentMode() };
   state.playlists = [...state.playlists, p];
   persist('playlists');
   notify();
@@ -148,14 +172,16 @@ export function deleteHistory(hid) {
   notify();
 }
 
-export function clearHistorySince(ts) {
-  state.history = state.history.filter(h => h.at < ts);
+/** Clears the current mode's history since `ts` (the other mode's history is kept). */
+export function clearHistorySince(ts, mode = currentMode()) {
+  state.history = state.history.filter(h => h.at < ts || itemMode(h.item) !== mode);
   persist('history');
   notify();
 }
 
-export function clearHistory() {
-  state.history = [];
+/** mode: only that mode's history; null: everything. */
+export function clearHistory(mode = null) {
+  state.history = mode ? state.history.filter(h => itemMode(h.item) !== mode) : [];
   persist('history');
   notify();
 }
@@ -165,7 +191,7 @@ export function clearHistory() {
 export function exportData() {
   return {
     app: 'SearchX', version: 1, exportedAt: new Date().toISOString(),
-    favorites: state.favorites, playlists: state.playlists, history: state.history, recent: state.recent,
+    favorites: state.favorites, playlists: state.playlists, history: state.history, recents: state.recents,
     filters: state.filters, defaultFilters: state.defaultFilters,
     settings: { ...state.settings, pinHash: null, pinSalt: null, bioId: null }
   };

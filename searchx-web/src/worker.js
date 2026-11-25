@@ -22,7 +22,7 @@ import * as r34video from './sources/r34video.js';
 import * as danbooru from './sources/danbooru.js';
 import * as yandere from './sources/yandere.js';
 
-export const VERSION = '2.5.0';
+export const VERSION = '2.5.1';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).

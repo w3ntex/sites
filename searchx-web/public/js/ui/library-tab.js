@@ -4,10 +4,23 @@ import { Segmented, EmptyState, Thumb, SwipeRow, SortableList, SourceBadge, cx }
 import { Grid } from './grid.js';
 import { openViewer } from './viewer.js';
 import { state, notify, openSheet } from '../state.js';
-import { createPlaylist, deletePlaylist, renamePlaylist, removeFromPlaylist, movePlaylistItem, movePlaylist, playlistById } from '../library.js';
+import {
+  createPlaylist, deletePlaylist, renamePlaylist, removeFromPlaylist, movePlaylistItem, movePlaylist, playlistById,
+  favoritesOf, playlistsOf
+} from '../library.js';
 import { haptic } from '../lib/haptics.js';
 import { duration } from '../lib/format.js';
-import { SOURCES } from '../config.js';
+import { SOURCES, MODES, modeOf } from '../config.js';
+import { switchMode } from './search-tab.js';
+
+/** "12 favoris en mode hentai" — the other mode's content stays hidden here. */
+function OtherMode({ count, what }) {
+  const other = modeOf(state.settings) === 'hentai' ? 'porn' : 'hentai';
+  if (!count) return null;
+  return html`<button type="button" class="other-mode" onClick=${() => switchMode(other)}>
+    <${Icon} name=${MODES[other].icon} size=${14} />${count} ${what} en mode ${MODES[other].label.toLowerCase()} · Changer de mode
+  </button>`;
+}
 
 const FAV_SORTS = [['recent', 'Récents'], ['old', 'Anciens'], ['source', 'Par source'], ['title', 'A → Z']];
 
@@ -30,15 +43,19 @@ function Favorites() {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('recent');
   const query = q.trim().toLowerCase();
-  let list = state.favorites.filter(it => matchText(it, query));
+  const mine = favoritesOf();
+  let list = mine.filter(it => matchText(it, query));
   if (sort === 'old') list = list.slice().reverse();
   if (sort === 'source') list = list.slice().sort((a, b) => a.src.localeCompare(b.src));
   if (sort === 'title') list = list.slice().sort((a, b) => a.title.localeCompare(b.title, 'fr'));
   const onOpen = item => { haptic(); openViewer(list, item.id); };
   const onLong = useCallback(item => openSheet('item', { item }), []);
-  if (!state.favorites.length) {
+  const others = state.favorites.length - mine.length;
+  if (!mine.length) {
     return html`<${EmptyState} icon="heart" title="Aucun favori"
-      text="Appuie longuement sur un résultat (ou touche ♥ dans le lecteur) pour l'ajouter ici." />`;
+      text="Appuie longuement sur un résultat (ou touche ♥ dans le lecteur) pour l'ajouter ici.">
+      <${OtherMode} count=${others} what=${`favori${others > 1 ? 's' : ''}`} />
+    <//>`;
   }
   return html`<div>
     <div class="list-tools">
@@ -47,7 +64,7 @@ function Favorites() {
         <${Icon} name="sort" size=${14} />${FAV_SORTS.find(s => s[0] === sort)[1]}</button>
     </div>
     ${list.length ? html`<${Grid} items=${list} onOpen=${onOpen} onLongPress=${onLong}
-      footer=${html`<div class="list-end muted">${list.length} favori${list.length > 1 ? 's' : ''}</div>`} />`
+      footer=${html`<div class="list-end muted">${list.length} favori${list.length > 1 ? 's' : ''}</div><${OtherMode} count=${others} what=${`favori${others > 1 ? 's' : ''}`} />`} />`
       : html`<p class="muted center pad">Aucun favori ne correspond.</p>`}
   </div>`;
 }
@@ -61,14 +78,17 @@ function newPlaylist() {
 
 function Playlists() {
   const [edit, setEdit] = useState(false);
-  const lists = state.playlists;
+  const lists = playlistsOf();
+  const others = state.playlists.length - lists.length;
   return html`<div class="pl-page">
     <div class="pl-toolbar">
       <button type="button" class="btn small" onClick=${() => { haptic(); newPlaylist(); }}><${Icon} name="plus" size=${16} /> Nouvelle playlist</button>
       ${lists.length > 1 && html`<button type="button" class="text-btn" onClick=${() => { haptic(); setEdit(!edit); }}>${edit ? 'OK' : 'Réorganiser'}</button>`}
     </div>
     ${!lists.length ? html`<${EmptyState} icon="list" title="Aucune playlist"
-        text="Crée une playlist, puis ajoute des vidéos depuis le menu d'un résultat (appui long)." />`
+        text="Crée une playlist, puis ajoute des vidéos depuis le menu d'un résultat (appui long).">
+        <${OtherMode} count=${others} what=${`playlist${others > 1 ? 's' : ''}`} />
+      <//>`
       : edit ? html`<div class="list-card"><${SortableList} items=${lists} keyOf=${p => p.id} onMove=${movePlaylist}
           renderItem=${(p, i, handle) => html`<div class="list-row">
             <span class="pl-cover"><${Thumb} src=${p.items[0]?.thumb} /></span>
@@ -145,7 +165,7 @@ export function LibraryTab() {
     <header class="topbar plain">
       <h1 class="page-title" data-jp=${seg === 'favorites' ? 'お気に入り' : 'プレイリスト'}>${seg === 'favorites' ? 'Favoris' : 'Playlists'}</h1>
       <${Segmented} value=${seg} onChange=${v => { state.libSegment = v; notify(); }}
-        options=${[['favorites', `Favoris${state.favorites.length ? ` (${state.favorites.length})` : ''}`], ['playlists', `Playlists${state.playlists.length ? ` (${state.playlists.length})` : ''}`]]} />
+        options=${[['favorites', `Favoris${favoritesOf().length ? ` (${favoritesOf().length})` : ''}`], ['playlists', `Playlists${playlistsOf().length ? ` (${playlistsOf().length})` : ''}`]]} />
     </header>
     <main class=${cx('content', seg === 'favorites' && 'pad-top')}>${seg === 'favorites' ? html`<${Favorites} />` : html`<${Playlists} />`}</main>
   </div>`;

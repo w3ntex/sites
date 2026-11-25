@@ -5,12 +5,13 @@ import { Grid, SkeletonGrid, Strip } from './grid.js';
 import { state, notify, emptySearch, openSheet, lockEnabled, lockNow, updateSettings, switchTab } from '../state.js';
 import {
   SOURCES, POPULAR, MEDIA_OPTIONS, SORT_OPTIONS, LAYOUTS, MODES, HENTAI_CATEGORIES, PORN_CATEGORIES,
-  siteSearchUrl, modeOf, modeSources
+  siteSearchUrl, modeOf
 } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
-  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch
+  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch, recentList
 } from '../search.js';
+import { itemMode } from '../modes.js';
 import { suggestTags, REFUSED_MESSAGE } from '../api.js';
 import { haptic } from '../lib/haptics.js';
 import { compact } from '../lib/format.js';
@@ -63,7 +64,7 @@ function SearchField({ focused, setFocused }) {
   };
 
   const q = text.trim().toLowerCase();
-  const recent = state.recent.filter(r => !q || r.toLowerCase().includes(q)).slice(0, q ? 4 : 8);
+  const recent = recentList().filter(r => !q || r.toLowerCase().includes(q)).slice(0, q ? 4 : 8);
   const pool = hentai ? HENTAI_CATEGORIES.map(c => c.q) : [...PORN_CATEGORIES.map(c => c.q), ...POPULAR];
   const popular = q ? [...new Set(pool)].filter(p => p.startsWith(q) && !recent.some(r => r.toLowerCase() === p)).slice(0, 4) : [];
   const follows = !hentai && q.startsWith('@')
@@ -143,11 +144,17 @@ function ResultsToolbar() {
     updateSettings({ layout: LAYOUTS[(i + 1) % LAYOUTS.length][0] });
   };
   const tags = per?.tags;
-  const showTags = tags && tags.length && tags.join(' ') !== S.query.toLowerCase().replace(/\s+/g, '_');
+  const showTags = tags && tags.length && tags.join(' ') !== (S.sent || S.query).toLowerCase().replace(/\s+/g, '_');
+  const translated = S.sent && S.sent !== S.query.trim().toLowerCase() ? S.sent : null;
   if (!per || per.state === 'error' || (!S.results.length && per.state !== 'done')) return null;
+  const notes = [
+    translated && `cherché en anglais : « ${translated} »`,
+    showTags && `tags : ${tags.join(', ').replace(/_/g, ' ')}`,
+    per.hidden > 0 && `${per.hidden} hors sujet masqué${per.hidden > 1 ? 's' : ''}`
+  ].filter(Boolean);
   return html`<div class="results-bar">
     <span class="rb-count">${S.results.length ? `${S.results.length} résultat${S.results.length > 1 ? 's' : ''} · ${SOURCES[S.tab].name}` : ''}
-      ${showTags ? html`<small>Tags : ${tags.join(', ').replace(/_/g, ' ')}</small>` : null}</span>
+      ${notes.length ? html`<small>${notes.join(' · ')}</small>` : null}</span>
     <button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier par', key: 'sort', options: SORT_OPTIONS, value: f.sort, onPick: v => setFilters({ sort: v }) }); }}>
       <${Icon} name="sort" size=${14} />${label(SORT_OPTIONS, f.sort)}
     </button>
@@ -213,6 +220,13 @@ function Results() {
   const onEnd = useCallback(() => loadMore(), []);
 
   if (S.notice) return html`<${EmptyState} icon="shield" title="Recherche refusée" text=${S.notice} />`;
+  if (S.redirect === 'hentai') {
+    return html`<${EmptyState} icon="sakura" title="Ça, c'est du hentai"
+      text=${`Le mode porno ne montre jamais de hentai. « ${S.query} » se cherche en mode hentai, sur les sites hentai.`}>
+      <button type="button" class="btn small" onClick=${() => { const q = S.query; switchMode('hentai'); runSearch(q); }}>
+        <${Icon} name="sakura" size=${16} /> Chercher en mode hentai</button>
+    <//>`;
+  }
   const src = S.tab;
   const per = S.per[src];
   if (!per) return html`<${EmptyState} icon="sliders" title="Aucune source" text="Active au moins une source dans Réglages." />`;
@@ -366,11 +380,11 @@ function Categories({ hentai }) {
 function Welcome() {
   const mode = modeOf(state.settings);
   const hentai = mode === 'hentai';
-  const mine = new Set(modeSources(mode));
   const seen = new Set();
-  // Each mode keeps to its own sites, here too.
-  const resume = state.history.map(h => h.item).filter(it => mine.has(it.src) && !seen.has(it.id) && seen.add(it.id)).slice(0, 14);
-  const favs = state.favorites.filter(it => mine.has(it.src)).slice(0, 14);
+  // Each mode keeps to its own content, here too.
+  const resume = state.history.map(h => h.item).filter(it => itemMode(it) === mode && !seen.has(it.id) && seen.add(it.id)).slice(0, 14);
+  const favs = state.favorites.filter(it => itemMode(it) === mode).slice(0, 14);
+  const recent = recentList();
   const names = activeSources().map(s => SOURCES[s].name);
   return html`<div class="welcome">
     <${InstallCard} />
@@ -389,9 +403,9 @@ function Welcome() {
       action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); switchTab('history'); }}>Historique</button>`} />
     <${Strip} title="Favoris" jp=${hentai ? 'お気に入り' : null} items=${favs} onOpen=${it => { haptic(); openViewer(favs, it.id); }}
       action=${html`<button type="button" class="text-btn" onClick=${() => { haptic(); state.libSegment = 'favorites'; switchTab('library'); }}>Tout voir</button>`} />
-    ${state.recent.length ? html`<section class="chip-section">
+    ${recent.length ? html`<section class="chip-section">
       <header><h3 data-jp=${hentai ? '最近の検索' : null}>Recherches récentes</h3><button type="button" class="text-btn" onClick=${() => { haptic(); clearRecent(); }}>Effacer</button></header>
-      <div class="chips wrap">${state.recent.slice(0, 14).map(r => html`<button type="button" key=${r} class="chip pillish"
+      <div class="chips wrap">${recent.slice(0, 14).map(r => html`<button type="button" key=${r} class="chip pillish"
         onClick=${() => { haptic(); runSearch(r); }}>${r}</button>`)}</div>
     </section>` : null}
     <${Categories} hentai=${hentai} />
@@ -429,13 +443,13 @@ export function SearchTab() {
           onClick=${() => { haptic(); lockNow(); }}><${Icon} name="lock" size=${18} /></button>`}
       </div>
       <${TypePills} />
-      ${S.query && !S.notice && html`<${SourceTabs} />`}
+      ${S.query && !S.notice && !S.redirect && html`<${SourceTabs} />`}
     </header>
     <div class="ptr" style=${`height:${pull}px`}>
       ${(pull > 0 || busy) && html`<span class=${cx('ptr-icon', (pull > 70 || busy) && 'ready', busy && 'spin')}><${Icon} name="refresh" size=${20} /></span>`}
     </div>
     <main class="content">
-      ${S.query ? html`${!S.notice && html`<${ResultsToolbar} />`}<${Results} />` : html`<${Welcome} />`}
+      ${S.query ? html`${!S.notice && !S.redirect && html`<${ResultsToolbar} />`}<${Results} />` : html`<${Welcome} />`}
     </main>
     ${S.query && html`<${ScrollTop} />`}
   </div>`;

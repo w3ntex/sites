@@ -119,13 +119,16 @@ export const rule34Autocomplete = q => [
   { label: 'loli (5)', value: 'loli', type: 'general' }
 ];
 
-export function redgifsJSON(n = 40, base = '', page = 1) {
+/** Like RedGIFs: most results carry the searched words as tags; a few don't, one is drawn (Hentai). */
+export function redgifsJSON(n = 40, base = '', page = 1, q = '') {
   const gifs = [];
+  const qtags = String(q || '').split(/\s+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1));
   for (let k = 0; k < n; k++) {
     const i = (page - 1) * n + k;
+    const tags = ['Sample', 'Clip', ...(i % 5 === 4 ? [] : qtags), ...(i % 10 === 9 ? ['Hentai'] : [])];
     gifs.push({
       id: `sampleclip${i}`, createDate: 1730000000 - i * 100, hasAudio: i % 2 === 0, width: 1080, height: 1920,
-      likes: 500 - i, tags: ['Sample', 'Clip'], verified: true, views: 20000 - i * 10, duration: 12.5, published: true,
+      likes: 500 - i, tags, verified: true, views: 20000 - i * 10, duration: 12.5, published: true,
       type: i % 8 === 7 ? 2 : 1, userName: CREATORS[(i + 1) % CREATORS.length], description: i % 3 ? title('redgifs', i) : '',
       urls: {
         sd: `https://media.redgifs.com/Sample${i}-mobile.mp4`, hd: `https://media.redgifs.com/Sample${i}.mp4`,
@@ -306,7 +309,7 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
       }
       // The search words must be sent as `query` (RedGIFs ignores `search_text`).
       if (!url.searchParams.get('query')) return json({ page, pages: 1, total: 0, gifs: [] });
-      return json(redgifsJSON(40, base, page));
+      return json(redgifsJSON(40, base, page, url.searchParams.get('query')));
     }
     if (host === NITTER || host.startsWith('nitter.')) {
       if (failing('x') || host !== NITTER) return text('<html><head><title>Attention Required! | Cloudflare</title></head></html>', 403);

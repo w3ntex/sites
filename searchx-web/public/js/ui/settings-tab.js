@@ -266,7 +266,7 @@ export function SettingsTab() {
 
       <${Group} title="Recherche">
         <${Row} icon="sliders" iconColor="#3e63dd" title="Filtres par défaut" chevron onClick=${() => openSheet('filters', { target: 'default' })} />
-        <${Row} icon="clock" iconColor="#6f6e77" title="Effacer les recherches récentes" onClick=${() => { clearRecent(); toast('Recherches récentes effacées'); }} />
+        <${Row} icon="clock" iconColor="#6f6e77" title="Effacer les recherches récentes" onClick=${() => { clearRecent({ all: true }); toast('Recherches récentes effacées'); }} />
       <//>
 
       <${Group} title="Données" footer="Tout est stocké uniquement sur ce téléphone. Exporte une sauvegarde avant de réinstaller l'app.">

@@ -7,7 +7,7 @@ import {
   setFilters, resetFilters, toggleCreator, clearCreators, showOnlyCreator, retrySource, runSearch, disableSources,
   isFollowing, toggleFollow
 } from '../search.js';
-import { toggleFavorite, isFavorite, addToPlaylist, createPlaylist } from '../library.js';
+import { toggleFavorite, isFavorite, addToPlaylist, createPlaylist, playlistsOf } from '../library.js';
 import { downloadUrl } from '../api.js';
 import { haptic } from '../lib/haptics.js';
 
@@ -143,7 +143,7 @@ function PlaylistSheet({ item }) {
       <button type="submit" class="btn small" disabled=${!name.trim()}>Créer</button>
     </form>
     <div class="options">
-      ${state.playlists.map(p => {
+      ${playlistsOf().map(p => {
         const has = p.items.some(i => i.id === item.id);
         return html`<button type="button" key=${p.id} class=${cx('option', has && 'on')} onClick=${() => { if (addToPlaylist(p.id, item)) close(); }}>
           <span class="pl-cover"><${Thumb} src=${p.items[0]?.thumb} /></span>
@@ -151,7 +151,7 @@ function PlaylistSheet({ item }) {
           ${has && html`<${Icon} name="check" size=${20} />`}
         </button>`;
       })}
-      ${!state.playlists.length && html`<p class="muted center pad">Pas encore de playlist : crée la première ci-dessus.</p>`}
+      ${!playlistsOf().length && html`<p class="muted center pad">Pas encore de playlist dans ce mode : crée la première ci-dessus.</p>`}
     </div>`}<//>`;
 }
 

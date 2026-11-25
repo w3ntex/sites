@@ -1,6 +1,7 @@
 import { useState, useEffect } from '../vendor/preact-htm.mjs';
 import { load, save } from './lib/storage.js';
 import { DEFAULT_FILTERS, DEFAULT_SETTINGS, SOURCE_ORDER } from './config.js';
+import { splitRecents } from './modes.js';
 
 function loadFilters(key) {
   const saved = load(key, {}) || {};
@@ -16,6 +17,10 @@ export function emptySearch() {
   return {
     query: '',
     per: {},            // per source: { state, items, page, more, cursor, error, tags, profile }
+    mode: 'porn',       // the mode the search was made in
+    sent: '',           // the words sent to the sites (French words translated)
+    words: [],          // keywords every result of a loose site must contain
+    redirect: null,     // 'hentai': this search belongs to hentai mode
     tab: null,          // the site shown (results are never mixed)
     tabChosen: false,   // the user picked the tab (no automatic switching any more)
     results: [],
@@ -43,7 +48,7 @@ export const state = {
   favorites: load('favorites', []) || [],
   playlists: load('playlists', []) || [],
   history: load('history', []) || [],
-  recent: load('recent', []) || [],
+  recents: load('recents', null) || splitRecents(load('recent', [])), // recent searches, one list per mode
   xFollows: load('xFollows', []) || [], // X accounts: [{ user, name, avatar }]
   search: emptySearch(),
   viewer: null,        // { items, index }

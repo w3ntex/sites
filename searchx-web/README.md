@@ -7,6 +7,17 @@ SearchX as a web app you install from Safari to the iPhone home screen. You don'
 
 ## Features
 
+**v2.5.1 (strict separation, exact keywords):**
+* Porn mode never shows drawn content:
+  * RedGIFs and X results tagged or described as hentai, anime, 3D, animation… are dropped.
+  * Typing "hentai", "anime", "rule34"… offers to search in hentai mode instead.
+* Hentai mode never shows real photos (booru `photo_(medium)`, `real_life`, `cosplay_photo`).
+* Favorites, playlists, history and recent searches belong to the mode they were made in. Each mode only shows its own, plus a link to the other mode.
+* Exact keywords:
+  * RedGIFs and X only keep results that contain every word searched. The number of hidden results is shown.
+  * Common French words are searched in English, since the sites tag in English ("gros seins" → big tits), and the translation is shown.
+* A newly deployed version is loaded on the next launch.
+
 **v2.5 (two modes, one tab per site):**
 * **Mode switch** (home screen, and Réglages → Mode). Each mode has its own sites and look. Results are shown one site at a time in tabs, in the site's own order, and are never mixed.
 * **Porno mode: RedGIFs and X.**
