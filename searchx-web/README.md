@@ -17,6 +17,13 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.4 (X tab reads like X):**
+* Posts are ordered by their X id, newest first, as on X, even when pages come from different mirrors or caches. The photos of one post stay together.
+* The first page of an X timeline is never served from the server cache.
+* The X tab has its own layout, a list by default like X's Videos tab, with relative times ("50 min", "1 h"). The layout button there only changes the X tab.
+* Account header: Médias / Vidéos / Photos, like the menu of X's media tab.
+* Duration and quality filters no longer hide X posts, since X gives neither.
+
 **v2.7.3:** The X tab shows posts in X's own order, whatever the sort chosen for the other sites. The sort menu is replaced by "Ordre de X" there.
 * Accounts: the account's timeline, newest first.
 * Keywords: the order of X's "Récent" tab. Nitter cannot read the "Populaire" tab, which the X app button opens.

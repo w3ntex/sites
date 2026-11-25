@@ -27,7 +27,7 @@ import { SpotifyHandoff, handleSpotifyCallback, handleSpotifyPoll } from './spot
 // Durable Object class used by the Spotify sign-in hand-over (wrangler.jsonc → durable_objects).
 export { SpotifyHandoff };
 
-export const VERSION = '2.7.3';
+export const VERSION = '2.7.4';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).
@@ -119,8 +119,11 @@ async function handleSearch(request, url, env, ctx) {
     try {
       const out = await withTimeout(source.search(opts), SEARCH_TIMEOUT_MS);
       const items = (out.items || []).filter(it => isItemAllowed(it, { drawn }));
+      // An X timeline's first page changes every few minutes: never served from the cache (later pages,
+      // addressed by their cursor, do not change).
+      const cacheable = items.length && !(src === 'x' && opts.page === 1);
       return json({ ok: true, src, items, more: Boolean(out.more), cursor: out.cursor || null, tags: out.tags || null, profile: out.profile || null },
-        200, { 'X-SX-Cacheable': items.length ? '1' : '0' });
+        200, { 'X-SX-Cacheable': cacheable ? '1' : '0' });
     } catch (e) {
       const status = e instanceof UpstreamError ? 502 : 500;
       return json({

@@ -9,7 +9,7 @@ import {
 } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
-  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch, recentList, goHome } from '../search.js';
+  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch, recentList, goHome, setXKind } from '../search.js';
 import { itemMode } from '../modes.js';
 import { suggestTags, REFUSED_MESSAGE } from '../api.js';
 import { haptic } from '../lib/haptics.js';
@@ -158,10 +158,13 @@ function ResultsToolbar() {
   const S = state.search;
   const f = state.filters;
   const per = S.per[S.tab];
+  // The X tab has its own layout (a list by default, like X); the other sites share the main one.
+  const layoutKey = S.tab === 'x' ? 'xLayout' : 'layout';
+  const currentLayout = state.settings[layoutKey] || (S.tab === 'x' ? 'list' : 'grid2');
   const cycleLayout = () => {
-    const i = LAYOUTS.findIndex(l => l[0] === state.settings.layout);
+    const i = LAYOUTS.findIndex(l => l[0] === currentLayout);
     haptic();
-    updateSettings({ layout: LAYOUTS[(i + 1) % LAYOUTS.length][0] });
+    updateSettings({ [layoutKey]: LAYOUTS[(i + 1) % LAYOUTS.length][0] });
   };
   const tags = per?.tags;
   const showTags = tags && tags.length && tags.join(' ') !== (S.sent || S.query).toLowerCase().replace(/\s+/g, '_');
@@ -181,7 +184,7 @@ function ResultsToolbar() {
         <${Icon} name="sort" size=${14} />${label(SORT_OPTIONS, f.sort)}
       </button>`}
     <button type="button" class="rb-btn icon" aria-label="Changer l'affichage" onClick=${cycleLayout}>
-      <${Icon} name=${LAYOUT_ICON[state.settings.layout] || 'layers'} size=${16} />
+      <${Icon} name=${LAYOUT_ICON[currentLayout] || 'layers'} size=${16} />
     </button>
   </div>`;
 }
@@ -193,7 +196,7 @@ function XProfile({ profile, query }) {
   useEffect(() => { updateFollow(profile); }, [profile?.user, profile?.avatar]);
   return html`<div class="xprofile">
     <span class="xavatar">${profile?.avatar ? html`<${Thumb} src=${profile.avatar} />` : html`<${Icon} name="user" size=${22} />`}</span>
-    <span class="xprofile-text"><strong>${profile?.name || user}</strong><small>@${user} · photos et vidéos récentes</small></span>
+    <span class="xprofile-text"><strong>${profile?.name || user}</strong><small>@${user} · dans l'ordre de X</small></span>
     <div class="xprofile-actions">
       <button type="button" class=${cx('btn small', following && 'ghost')} onClick=${() => {
         haptic();
@@ -201,6 +204,8 @@ function XProfile({ profile, query }) {
       }}><${Icon} name=${following ? 'userCheck' : 'userPlus'} size=${15} />${following ? 'Suivi' : 'Suivre'}</button>
       <a class="text-btn small-link" href=${xAppUrl({ user })} onClick=${() => haptic()}>Ouvrir dans X</a>
     </div>
+    <div class="xkind">${[['all', 'Médias'], ['video', 'Vidéos'], ['photo', 'Photos']].map(([k, l]) => html`<button type="button" key=${k}
+      class=${cx('xkind-btn', state.search.xKind === k && 'on')} onClick=${() => { if (state.search.xKind !== k) { haptic(); setXKind(k); window.scrollTo({ top: 0 }); } }}>${l}</button>`)}</div>
   </div>`;
 }
 
@@ -314,7 +319,8 @@ function Results() {
           ${per.autoStop ? html`<p class="list-note">Les dernières pages n'ont presque rien ajouté avec ces filtres.</p>` : null}
           <button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
       : html`<div class="list-end muted">Fin des résultats ${SOURCES[src].name}</div>`;
-  return html`${head}<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${html`${footer}<${MoreResults} />`} onEndReached=${onEnd} />`;
+  return html`${head}<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${html`${footer}<${MoreResults} />`} onEndReached=${onEnd}
+    layout=${isX ? (state.settings.xLayout || 'list') : undefined} />`;
 }
 
 function usePullToRefresh(onRefresh, enabled) {

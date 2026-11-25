@@ -28,6 +28,7 @@ export function emptySearch() {
     selectedCreators: [],
     loading: false,
     loadingMore: false,
+    xKind: 'all',       // X account: 'all' | 'video' | 'photo' (like X's media tab menu)
     notice: null
   };
 }

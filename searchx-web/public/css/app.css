@@ -1449,3 +1449,9 @@ html.vt-theme::view-transition-new(root) { z-index: 2; }
 
 /* v2.7.3 — X keeps X's order: no sort menu there */
 .rb-btn.static { cursor: default; color: var(--text-2); }
+
+/* v2.7.4 — X account header: Médias / Vidéos / Photos, like the menu of X's media tab */
+.xprofile { flex-wrap: wrap; }
+.xkind { flex: 1 0 100%; display: flex; gap: 6px; margin-top: 2px; }
+.xkind-btn { flex: 1; height: 34px; border-radius: 11px; background: var(--surface-2); color: var(--text-2); font-size: 13.5px; font-weight: 700; transition: background .2s, color .2s; }
+.xkind-btn.on { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }

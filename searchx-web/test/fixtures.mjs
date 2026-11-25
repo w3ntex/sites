@@ -175,7 +175,7 @@ export function nitterRss({ account = null, n = 8, q = 'sample', start = 0 } = {
   for (let k = 0; k < n; k++) {
     const i = start + k;
     const user = account || `creator${i % 3}`;
-    const id = 2100000000000000000n + BigInt(i);
+    const id = 2100000000000000000n + BigInt(100000 - i); // newest first, like X
     const kind = i % 4;
     const link = `http://${NITTER}/${user}/status/${id}#m`;
     let media;

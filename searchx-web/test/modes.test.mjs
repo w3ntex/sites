@@ -73,3 +73,29 @@ test('X keeps X\'s own order (keywords and accounts), whatever the sort', async 
   // Other sites still follow the chosen sort.
   assert.equal(ids(rank(list, 'views', 'sunset beach', 'redgifs')), 'x:1,x:2,x:3');
 });
+
+test('X order: newest post first by post id, photos of one post in order', async () => {
+  const { rank, xOrder } = await import('../public/js/search.js');
+  // Arrived out of order (two pages from different mirrors / a cached first page).
+  const list = [
+    { id: 'x:1999000000000000001:0', tweet: '1999000000000000001', src: 'x', title: 'old' },
+    { id: 'x:2001000000000000005:1', tweet: '2001000000000000005', src: 'x', title: 'new, 2nd photo' },
+    { id: 'x:2001000000000000005:0', tweet: '2001000000000000005', src: 'x', title: 'new, 1st photo' },
+    { id: 'x:2000500000000000000:0', tweet: '2000500000000000000', src: 'x', title: 'middle' },
+    { id: 'x:999000000000000000:0', tweet: '999000000000000000', src: 'x', title: 'very old (shorter id)' }
+  ];
+  assert.deepEqual(rank(list, 'relevance', '@a', 'x').map(i => i.title), ['new, 1st photo', 'new, 2nd photo', 'middle', 'old', 'very old (shorter id)']);
+  assert.ok(xOrder(list[2], list[1]) < 0);
+});
+
+test('relative times like X ("50 min", "1 h")', async () => {
+  const { ago } = await import('../public/js/lib/format.js');
+  const now = Date.UTC(2026, 10, 25, 18, 0, 0);
+  const t = s => Math.round(now / 1000) - s;
+  assert.equal(ago(t(30), now), '30 s');
+  assert.equal(ago(t(50 * 60), now), '50 min');
+  assert.equal(ago(t(65 * 60), now), '1 h');
+  assert.equal(ago(t(3 * 86400), now), '3 j');
+  assert.match(ago(t(40 * 86400), now), /oct/);
+  assert.equal(ago(null, now), '');
+});

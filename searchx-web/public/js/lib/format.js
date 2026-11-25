@@ -11,6 +11,18 @@ export function duration(sec) {
   return `${h ? `${h}:` : ''}${mm}:${String(r).padStart(2, '0')}`;
 }
 
+/** "12 s", "50 min", "3 h", "2 j", then the date — like X's post times. ts in seconds. */
+export function ago(ts, now = Date.now()) {
+  if (!Number.isFinite(ts) || ts <= 0) return '';
+  const s = Math.max(0, Math.round(now / 1000 - ts));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)} j`;
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) });
+}
+
 export function compact(n) {
   if (n == null || !Number.isFinite(n)) return '';
   return compactFmt.format(n);

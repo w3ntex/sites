@@ -2,7 +2,7 @@ import { html, useEffect, useRef, useMemo, useState } from '../../vendor/preact-
 import { Icon } from './icons.js';
 import { SourceBadge, Thumb, useLongPress, cx } from './common.js';
 import { SOURCES } from '../config.js';
-import { duration, compact } from '../lib/format.js';
+import { duration, compact, ago } from '../lib/format.js';
 import { state } from '../state.js';
 
 function badgeText(it) {
@@ -51,7 +51,8 @@ export function Card({ item, onOpen, onLongPress, layout = 'grid2', watched = fa
   const preview = state.settings.previews && item.preview && layout !== 'list';
   const meta = item.views != null
     ? html`<${Icon} name="eye" size=${11} />${compact(item.views)}`
-    : item.likes != null ? html`<${Icon} name="heart" size=${11} />${compact(item.likes)}` : null;
+    : item.likes != null ? html`<${Icon} name="heart" size=${11} />${compact(item.likes)}`
+      : item.src === 'x' && item.date ? html`<${Icon} name="clock" size=${11} />${ago(item.date)}` : null;
   return html`<article class=${cx('card', `c-${layout}`, watched && 'watched')} ...${press}>
     <div class="card-thumb">
       <${Thumb} src=${item.thumb} fallback=${item.thumb2} alt="" />
