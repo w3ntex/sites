@@ -13,7 +13,7 @@ export const REDGIFS_TOKEN_URL = 'https://api.redgifs.com/v2/auth/temporary';
 export const REDGIFS_ORDERS = { relevance: 'score', views: 'top', rating: 'top28', newest: 'latest' };
 
 export function redgifsSearchUrl({ q, page = 1, sort = 'relevance', media = 'all', scope = '' }) {
-  const p = new URLSearchParams({ query: q, order: REDGIFS_ORDERS[sort] || 'score', count: '40', page: String(page) });
+  const p = new URLSearchParams({ query: q, order: REDGIFS_ORDERS[sort] || 'score', count: '80', page: String(page) });
   if (scope === 'hentai') p.set('tags', 'Hentai');
   if (media === 'image') p.set('type', 'i');
   else if (media === 'gif' || media === 'video') p.set('type', 'g');
@@ -76,6 +76,9 @@ export function redgifsMore(data, page, items) {
   const pages = num(data?.pages);
   return pages != null ? page < pages : items.length >= 40;
 }
+
+/** Sites that add many precise results in porn mode (offered when results are few). */
+export const MORE_RESULTS_SOURCES = ['eporner', 'redtube', 'xhamster'];
 
 // ---- Eporner ------------------------------------------------------------------------------------
 

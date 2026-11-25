@@ -156,7 +156,7 @@ async function fetchOne(g, src, page, fresh = false) {
   recompute();
   notify();
   // Few results left after the checks: fetch the next page right away (twice at most).
-  if (per.state === 'done' && per.more && per.items.length < 12 && page < 3 && g === generation && state.search === S) {
+  if (per.state === 'done' && per.more && per.items.length < 40 && page < 3 && g === generation && state.search === S) {
     fetchOne(g, src, page + 1);
   }
 }

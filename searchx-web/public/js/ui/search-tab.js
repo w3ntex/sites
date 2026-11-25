@@ -19,6 +19,22 @@ import { applyTheme } from '../lib/theme.js';
 import { openViewer } from './viewer.js';
 import { Petals, isNeon } from './theme.js';
 import { RelaySheet } from './relay.js';
+import { MORE_RESULTS_SOURCES } from '../shared/apis.js';
+import { enableSource } from '../search.js';
+
+/** Porn mode with few results: offer precise video sites as extra tabs (never mixed). */
+function MoreResults() {
+  const S = state.search;
+  if (modeOf(state.settings) !== 'porn' || !S.query || S.loading || /^@/.test(S.query)) return null;
+  const total = activeSources().reduce((n, s) => n + (S.per[s]?.items.length || 0), 0);
+  const offer = MORE_RESULTS_SOURCES.filter(s => !state.filters.sources.includes(s));
+  if (total >= 60 || !offer.length) return null;
+  return html`<div class="more-results">
+    <p><b>Peu de résultats ?</b> Ajoute des sites vidéo à la recherche précise, chacun dans son onglet :</p>
+    <div class="chips wrap">${offer.map(s => html`<button type="button" key=${s} class="chip" style=${`--c:${SOURCES[s].color}`}
+      onClick=${() => { haptic(); enableSource(s, true); }}><${Icon} name="plus" size=${13} />${SOURCES[s].name}</button>`)}</div>
+  </div>`;
+}
 
 const label = (opts, v) => (opts.find(o => o[0] === v) || [, ''])[1];
 const LAYOUT_ICON = { grid2: 'layers', grid3: 'grip', list: 'list' };
@@ -184,8 +200,8 @@ function XProfile({ profile, query }) {
 function XHint() {
   const follows = state.xFollows.slice(0, 12);
   return html`<div class="xhint">
-    <p><${Icon} name="info" size=${15} /> Sur X, la recherche par mots montre peu de contenu adulte (X le cache sans compte).
-      Cherche plutôt un compte : <b>@nom</b>.</p>
+    <p><${Icon} name="info" size=${15} /> Sur X, la recherche par mots ne renvoie qu'une poignée de posts adultes (X les cache sans compte).
+      Pour du volume : un compte précis (<b>@nom</b>), ou l'onglet RedGIFs.</p>
     ${follows.length ? html`<div class="chips scroll-x">${follows.map(f => html`<button type="button" key=${f.user} class="chip small"
       onClick=${() => { haptic(); runSearch(`@${f.user}`); }}><${Icon} name="at" size=${12} />${f.user}</button>`)}</div>` : null}
   </div>`;
@@ -242,12 +258,12 @@ function Results() {
     return html`${head}<${EmptyState} icon="shield" title=${`Refusé sur ${SOURCES[src].name}`}
       text=${`${SOURCES[src].name} n'est pas vérifié comme les sites pro : les mots qui peuvent viser des mineurs y sont refusés. Les autres onglets restent disponibles.`} />`;
   }
-  if (per.state === 'error') return html`${head}<${TabError} src=${src} per=${per} />`;
+  if (per.state === 'error') return html`${head}<${TabError} src=${src} per=${per} /><${MoreResults} />`;
   if (!S.results.length && per.state === 'loading') return html`${head}<${SkeletonGrid} count=${8} />`;
   if (!S.results.length) {
     const others = activeSources().filter(s => s !== src && S.per[s]?.items.length);
     const filtered = per.items.length > 0;
-    return html`${head}<${EmptyState} icon="search" title=${filtered ? 'Rien avec ces filtres' : `Rien sur ${SOURCES[src].name}`}
+    return html`${head}<${MoreResults} /><${EmptyState} icon="search" title=${filtered ? 'Rien avec ces filtres' : `Rien sur ${SOURCES[src].name}`}
       kaomoji="(´・ω・\`)"
       text=${filtered ? 'Élargis la durée ou la qualité.' : `Aucun résultat pour « ${S.query} » sur ${SOURCES[src].name}.`}>
       ${filtered ? html`<button type="button" class="btn ghost small" onClick=${() => { resetFilters(); clearCreators(); }}>Réinitialiser les filtres</button>` : null}
@@ -260,7 +276,7 @@ function Results() {
     : canLoadMore()
       ? html`<div class="list-end"><button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
       : html`<div class="list-end muted">Fin des résultats ${SOURCES[src].name}</div>`;
-  return html`${head}<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${footer} onEndReached=${onEnd} />`;
+  return html`${head}<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${html`${footer}<${MoreResults} />`} onEndReached=${onEnd} />`;
 }
 
 function usePullToRefresh(onRefresh, enabled) {

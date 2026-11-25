@@ -1090,3 +1090,9 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 .steps b { color: var(--text); }
 .steps a { color: var(--accent-2); font-weight: 600; text-decoration: underline; }
 .relay-msg { margin: 10px 2px 0; font-size: 14px; }
+
+/* v2.5.3 — more results */
+.more-results { margin: 14px 0 6px; padding: 12px 14px; border-radius: 14px; background: var(--surface); }
+.more-results p { margin: 0 0 4px; font-size: 13.5px; color: var(--text-2); line-height: 1.4; }
+.more-results p b { color: var(--text); }
+.more-results .chip .icon { color: var(--accent-2); }
