@@ -1,0 +1,4 @@
+# Vercel only hosts the RedGIFs relay (api/redgifs.js). Everything else runs on Cloudflare.
+/*
+!/api
+!/vercel.json

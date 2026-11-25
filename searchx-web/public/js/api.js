@@ -7,7 +7,8 @@ import { load, save } from './lib/storage.js';
 import { redditUrls, parseRedditListing, mergeRedditResults } from './shared/reddit.js';
 import {
   epornerSearchUrl, parseEporner, epornerMore, pullpushUrl, parsePullPush,
-  danbooruAutocompleteUrl, parseDanbooruAutocomplete, danbooruPostsUrl, parseDanbooru
+  danbooruAutocompleteUrl, parseDanbooruAutocomplete, danbooruPostsUrl, parseDanbooru,
+  redgifsRelayUrl, parseRedGifs, redgifsMore
 } from './shared/apis.js';
 import { isItemAllowed, isQueryAllowed } from './shared/safety.js';
 import { isStrictSource } from './config.js';
@@ -135,8 +136,31 @@ function jsonpSandboxed(url, signal, timeout = 12000) {
 
 // ---- direct (phone) implementations ------------------------------------------------------------
 
-// RedGIFs is not called from the phone: its search API only accepts its own website (CORS), so it
-// always goes through the server.
+// RedGIFs only accepts its own website from a browser (CORS) and limits Cloudflare's servers.
+// With the relay set up (api/redgifs.js on Vercel), the phone asks the relay directly.
+async function redgifsRelay(p, signal) {
+  const url = redgifsRelayUrl(state.settings.rgRelay, p);
+  const res = await fetch(url, { signal: withTimeout(signal, 15000), credentials: 'omit', headers: { Accept: 'application/json' } });
+  let body = null;
+  try { body = await res.json(); } catch { /* not JSON */ }
+  if (!res.ok || !body) {
+    const e = new Error(body?.error ? `Relais RedGIFs : ${body.error}` : `Relais RedGIFs injoignable (${res.status}).`);
+    e.status = res.status;
+    throw e;
+  }
+  const items = parseRedGifs(body);
+  return { items, more: redgifsMore(body, p.page, items) };
+}
+
+/** Checks a relay address (Réglages → Relais RedGIFs). */
+export async function testRelay(base) {
+  const url = redgifsRelayUrl(base, { q: 'blonde', page: 1, sort: 'relevance' });
+  if (!url) throw new Error("Adresse invalide (exemple : sites-xxxx.vercel.app).");
+  const res = await fetch(url, { signal: withTimeout(null, 15000), credentials: 'omit' });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body?.gifs) throw new Error(body?.error || `Le relais a répondu ${res.status}.`);
+  return body.gifs.length;
+}
 
 /** Danbooru allows calls from any page: words → tags with its autocomplete, then the posts. */
 async function danbooruDirect(p, signal) {
@@ -244,6 +268,14 @@ export async function searchSource(src, input, signal) {
   const params = { ...input, q: String(input.q || '').trim(), scope: hentai && (src === 'redgifs' || src === 'reddit') ? 'hentai' : '' };
 
   let directError = null;
+  if (src === 'redgifs' && state.settings.rgRelay) {
+    try {
+      return finish(src, await redgifsRelay(params, signal), 'relay', drawn);
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      directError = e; // then the Cloudflare server, which RedGIFs often limits
+    }
+  }
   const fn = DIRECT[src];
   if (fn) {
     if (src === 'reddit' || canDirect(src)) {
@@ -263,7 +295,8 @@ export async function searchSource(src, input, signal) {
   try {
     return finish(src, await workerSearch(src, params, signal), 'server', drawn);
   } catch (e) {
-    if (directError && !signal?.aborted) e.phone = src === 'reddit' ? directError.message : (directError.skipped ? directError.message : phoneReason(directError));
+    if (directError && !signal?.aborted) e.phone = src === 'reddit' || src === 'redgifs' ? directError.message : (directError.skipped ? directError.message : phoneReason(directError));
+    if (src === 'redgifs') e.relayHint = !state.settings.rgRelay;
     throw e;
   }
 }

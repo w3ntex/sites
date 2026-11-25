@@ -20,6 +20,25 @@ export function redgifsSearchUrl({ q, page = 1, sort = 'relevance', media = 'all
   return `https://api.redgifs.com/v2/gifs/search?${p}`;
 }
 
+/** RedGIFs relay (api/redgifs.js on Vercel): same parameters, called straight from the phone. */
+export function relayBase(input) {
+  let s = String(input || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'https:') return '';
+    return `${u.origin}`;
+  } catch {
+    return '';
+  }
+}
+
+export function redgifsRelayUrl(base, p) {
+  const b = relayBase(base);
+  return b ? `${b}/api/redgifs?${new URL(redgifsSearchUrl(p)).searchParams}` : '';
+}
+
 export function parseRedGifs(data) {
   const out = [];
   for (const g of data?.gifs || []) {

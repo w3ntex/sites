@@ -8,6 +8,7 @@ import { REDGIFS_TOKEN_URL, redgifsSearchUrl, parseRedGifs, redgifsMore } from '
 const UA = MOBILE_UA;
 const FIRST_PARTY = { Accept: 'application/json', Origin: 'https://www.redgifs.com', Referer: 'https://www.redgifs.com/' };
 let cached = null; // { token, exp } for this isolate
+const CLOUDFLARE_LIMITED = 'RedGIFs limite les serveurs Cloudflare (partagés par énormément de services). Active le relais RedGIFs : Réglages → Relais RedGIFs (gratuit, 3 minutes).';
 
 function tokenExpiry(token) {
   try {
@@ -21,10 +22,11 @@ function tokenExpiry(token) {
 async function newToken() {
   let data;
   try {
-    data = await upstream(REDGIFS_TOKEN_URL, { as: 'json', ua: UA, headers: FIRST_PARTY, timeout: 10000 });
+    // retried: 2 → no automatic retry on 429 (it only makes the limit worse).
+    data = await upstream(REDGIFS_TOKEN_URL, { as: 'json', ua: UA, headers: FIRST_PARTY, timeout: 10000, retried: 2 });
   } catch (e) {
     if (e instanceof UpstreamError && e.status === 429) {
-      throw new UpstreamError('blocked', 429, 'RedGIFs limite le serveur pour le moment (trop de demandes de jeton). Réessaie dans une minute.', e.debug);
+      throw new UpstreamError('blocked', 429, CLOUDFLARE_LIMITED, e.debug);
     }
     throw e;
   }
@@ -45,13 +47,14 @@ export async function search({ q, page, sort, media, scope, env }) {
     const reuse = attempt === 0 && cached && cached.exp > Date.now();
     const token = reuse ? cached.token : await newToken();
     try {
-      const data = await upstream(url, { as: 'json', ua: UA, headers: { ...FIRST_PARTY, Authorization: `Bearer ${token}` } });
+      const data = await upstream(url, { as: 'json', ua: UA, headers: { ...FIRST_PARTY, Authorization: `Bearer ${token}` }, retried: 2 });
       const items = parseRedGifs(data);
       return { items, more: redgifsMore(data, page, items) };
     } catch (e) {
       last = e;
       // WrongSender (token from another server address) or expired token: get a new one.
       if (e instanceof UpstreamError && e.kind === 'http' && e.status === 401) { cached = null; continue; }
+      if (e instanceof UpstreamError && e.status === 429) throw new UpstreamError('blocked', 429, CLOUDFLARE_LIMITED, e.debug);
       throw e;
     }
   }

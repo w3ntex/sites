@@ -1,6 +1,6 @@
 import { HENTAI_SUBREDDITS } from './shared/reddit.js';
 
-export const APP_VERSION = '2.5.1';
+export const APP_VERSION = '2.5.2';
 
 // ---- modes ---------------------------------------------------------------------------------------
 // Two separate apps in one: each mode has its own sources (shown one site at a time, never mixed)
@@ -92,7 +92,7 @@ export function siteSearchUrl(src, query, { mode = 'porn' } = {}) {
     case 'redtube': return `https://www.redtube.com/?search=${e}`;
     case 'eporner': return `https://www.eporner.com/search/${dashed}/`;
     case 'rule34': return `https://rule34.xxx/index.php?page=post&s=list&tags=${tags}`;
-    case 'redgifs': return mode === 'hentai' ? `https://www.redgifs.com/search?query=${e}&tags=Hentai` : `https://www.redgifs.com/search?query=${e}`;
+    case 'redgifs': return mode === 'hentai' ? `https://www.redgifs.com/search/gifs?query=${e}&tags=Hentai` : `https://www.redgifs.com/search/gifs?query=${e}`;
     case 'reddit': return mode === 'hentai'
       ? `https://www.reddit.com/r/${HENTAI_SUBREDDITS.join('+')}/search/?q=${e}&restrict_sr=1&include_over_18=1`
       : `https://www.reddit.com/search/?q=${e}&include_over_18=1`;
@@ -146,5 +146,6 @@ export const DEFAULT_SETTINGS = {
   r34key: '',
   r34user: '',
   accessKey: '',
+  rgRelay: '',          // RedGIFs relay on Vercel (RedGIFs limits Cloudflare's servers)
   mode: 'porn'          // 'porn' | 'hentai' (also picks the theme)
 };

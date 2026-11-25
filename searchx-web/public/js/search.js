@@ -146,7 +146,7 @@ async function fetchOne(g, src, page, fresh = false) {
     if (ctrl.signal.aborted && !timedOut) return; // cancelled by a newer search
     const msg = timedOut ? `${SOURCES[src].name} n'a pas répondu en 35 secondes.` : (e?.message || 'Erreur inconnue.');
     per.more = false;
-    if (page === 1) { per.state = 'error'; per.error = msg; per.debug = e?.debug || ''; per.phone = e?.phone || ''; }
+    if (page === 1) { per.state = 'error'; per.error = msg; per.debug = e?.debug || ''; per.phone = e?.phone || ''; per.hint = e?.relayHint ? 'relay' : ''; }
     else per.state = 'done';
   } finally {
     clearTimeout(timer);

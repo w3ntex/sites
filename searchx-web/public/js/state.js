@@ -114,7 +114,7 @@ export function lockNow() {
 }
 
 // Connection settings survive a reset: they are not personal data, and re-entering an API key is a pain.
-const KEPT_ON_RESET = ['r34key', 'r34user', 'accessKey'];
+const KEPT_ON_RESET = ['r34key', 'r34user', 'accessKey', 'rgRelay'];
 
 /** Last resort when locked out: erase everything personal stored by SearchX on this phone, then restart. */
 export async function resetEverything() {

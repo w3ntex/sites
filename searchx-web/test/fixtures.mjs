@@ -303,6 +303,7 @@ export function mockFetch(base = '', { failSources = [] } = {}) {
     if (host === 'api.redgifs.com') {
       if (url.pathname.includes('/auth/temporary')) return json({ token: `tok${++redgifsTokens}` });
       if (failing('redgifs')) return json({ error: { code: 'x' } }, 401);
+      if (failing('redgifs-429')) return json({ error: { code: 'TooManyRequests', message: 'Too many requests' } }, 429);
       if (failing('redgifs-wrongsender') && !redgifsRetried) {
         redgifsRetried = true;
         return json({ error: { code: 'WrongSender', message: 'This token belongs to a different device, please request a new one.', status: 401 } }, 401);

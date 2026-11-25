@@ -18,6 +18,7 @@ import { compact } from '../lib/format.js';
 import { applyTheme } from '../lib/theme.js';
 import { openViewer } from './viewer.js';
 import { Petals, isNeon } from './theme.js';
+import { RelaySheet } from './relay.js';
 
 const label = (opts, v) => (opts.find(o => o[0] === v) || [, ''])[1];
 const LAYOUT_ICON = { grid2: 'layers', grid3: 'grip', list: 'list' };
@@ -200,6 +201,9 @@ function TabError({ src, per }) {
     <p>${per.error}</p>
     ${src === 'rule34' && /clé|API/i.test(per.error || '') && html`<p class="muted">Ajoute ta clé dans Réglages → Sources → Identifiants Rule34.</p>`}
     <div class="sheet-buttons col">
+      ${src === 'redgifs' && (per.hint === 'relay' || /Cloudflare|429|relais/i.test(per.error || '')) && html`<button type="button" class="btn"
+        onClick=${() => { haptic(); openSheet('custom', { render: () => html`<${RelaySheet} />` }); }}>
+        <${Icon} name="zap" size=${16} /> ${state.settings.rgRelay ? 'Vérifier le relais RedGIFs' : 'Activer le relais RedGIFs (3 min)'}</button>`}
       <button type="button" class="btn" onClick=${() => { haptic(); retrySource(src); }}><${Icon} name="refresh" size=${16} /> Réessayer</button>
       <a class="btn ghost" href=${siteSearchUrl(src, S.query, { mode })} target="_blank" rel="noopener noreferrer" onClick=${() => haptic()}>
         <${Icon} name="external" size=${16} /> Ouvrir « ${S.query} » sur ${SOURCES[src].name}</a>

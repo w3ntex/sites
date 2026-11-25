@@ -6,6 +6,7 @@ import { state, notify, updateSettings, openSheet, closeSheet, toast, lockEnable
 import { SOURCES, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, MODES, modeOf, modeSources } from '../config.js';
 import { clearRecent, disableSources, enableSource } from '../search.js';
 import { switchMode } from './search-tab.js';
+import { RelaySheet } from './relay.js';
 import { clearHistory, exportData, importData } from '../library.js';
 import { searchSource, health, resetDirect } from '../api.js';
 import { biometricsAvailable, registerBiometrics } from '../lib/lock.js';
@@ -247,6 +248,9 @@ export function SettingsTab() {
         ${modeSources(mode).map(src => html`<${Row} key=${src} title=${SOURCES[src].name} subtitle=${SOURCES[src].note + (SOURCES[src].extra ? ' (optionnel)' : '')}
           lead=${html`<${SourceBadge} src=${src} />`}
           right=${html`<${Switch} checked=${state.filters.sources.includes(src)} onChange=${on => enableSource(src, on)} label=${SOURCES[src].name} />`} />`)}
+        <${Row} icon="zap" iconColor=${s.rgRelay ? '#46a758' : '#ff4b6e'} title="Relais RedGIFs" chevron
+          subtitle="Indispensable : RedGIFs limite les serveurs Cloudflare."
+          right=${s.rgRelay ? 'Actif' : 'À activer'} onClick=${() => openSheet('custom', { render: () => html`<${RelaySheet} />` })} />
         ${mode === 'porn' && html`<${Row} icon="at" iconColor="#1d9bf0" title="Comptes X suivis" chevron
           right=${state.xFollows.length ? String(state.xFollows.length) : 'Aucun'} onClick=${() => openSheet('xaccounts')} />`}
         ${mode === 'hentai' && html`<${Row} icon="key" iconColor=${r34ok ? '#46a758' : '#f76b15'} title="Identifiants Rule34" chevron

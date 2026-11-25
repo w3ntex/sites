@@ -5,7 +5,19 @@ SearchX as a web app you install from Safari to the iPhone home screen. You don'
 * **App**: `public/`, built with Preact + htm and no build step. French UI. Two modes, each with its own sites and theme: *Porno* (black, crimson to amber, Bebas Neue) and *Hentai* (neon pink and violet, Mochiy Pop One).
 * **API**: `src/worker.js`, a Cloudflare Worker that searches the sites server-side. Browsers can't call those sites directly because of CORS. The Worker also serves the app.
 
+## RedGIFs relay (Vercel)
+
+RedGIFs rate-limits Cloudflare's servers (429), and its CORS policy only lets its own website call the search API from a browser. `api/redgifs.js` at the repository root is a small Vercel function that runs the RedGIFs search from Vercel and answers the app with open CORS. Without it, RedGIFs shows "429" almost all the time.
+
+Setting it up from the phone:
+1. Import the repository on vercel.com/new and tap Deploy. `.vercelignore` limits the deployment to `api/` and `vercel.json`.
+2. Copy the project's domain (`*.vercel.app`) into Réglages → Relais RedGIFs.
+
+The app then calls the relay straight from the phone, and the Worker is only a fallback.
+
 ## Features
+
+**v2.5.2:** RedGIFs relay (see above). The "Ouvrir sur RedGIFs" link now uses the site's real search URL (`/search/gifs?query=`).
 
 **v2.5.1 (strict separation, exact keywords):**
 * Porn mode never shows drawn content:
