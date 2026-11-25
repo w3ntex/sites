@@ -269,7 +269,7 @@ function Results() {
   const S = state.search;
   const onOpen = useCallback(item => { haptic(); openViewer(state.search.results, item.id); }, []);
   const onLong = useCallback(item => openSheet('item', { item }), []);
-  const onEnd = useCallback(() => loadMore(), []);
+  const onEnd = useCallback(() => loadMore({ auto: true }), []);
 
   if (S.notice) return html`<${EmptyState} icon="shield" title="Recherche refusée" text=${S.notice} />`;
   if (S.redirect === 'hentai') {
@@ -307,7 +307,9 @@ function Results() {
   const footer = S.loadingMore
     ? html`<div class="list-end"><${Spinner} /></div>`
     : canLoadMore()
-      ? html`<div class="list-end"><button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
+      ? html`<div class="list-end">
+          ${per.autoStop ? html`<p class="list-note">Les dernières pages n'ont presque rien ajouté avec ces filtres.</p>` : null}
+          <button type="button" class="btn ghost small" onClick=${() => { haptic(); loadMore(); }}>Charger plus</button></div>`
       : html`<div class="list-end muted">Fin des résultats ${SOURCES[src].name}</div>`;
   return html`${head}<${Grid} items=${S.results} onOpen=${onOpen} onLongPress=${onLong} footer=${html`${footer}<${MoreResults} />`} onEndReached=${onEnd} />`;
 }

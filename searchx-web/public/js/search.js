@@ -208,16 +208,27 @@ export function canLoadMore() {
   return per.state === 'done' && per.more;
 }
 
-export function loadMore() {
+/**
+ * Next page of the site shown. Infinite scroll (auto) stops by itself when the last two pages brought
+ * almost nothing on screen — strict filters such as "Vidéos" on an image site would otherwise fetch
+ * page after page without end. The "Charger plus" button still works, and a good page resumes it.
+ */
+export function loadMore({ auto = false } = {}) {
   if (!canLoadMore()) return;
   const S = state.search;
-  const g = generation;
   const src = S.tab;
+  const per = S.per[src];
+  if (auto && per.autoStop) return;
+  const g = generation;
+  const before = S.results.length;
   S.loadingMore = true;
   notify();
-  fetchOne(g, src, (S.per[src].page || 1) + 1).then(() => {
+  fetchOne(g, src, (per.page || 1) + 1).then(() => {
     if (g !== generation) return;
     S.loadingMore = false;
+    const gained = S.tab === src ? S.results.length - before : 0;
+    per.lean = gained < 6 ? (per.lean || 0) + 1 : 0;
+    per.autoStop = per.lean >= 2;
     notify();
   });
 }
@@ -257,6 +268,7 @@ export function setFilters(patch) {
 
   // A different media type changes what every source must be asked → new search.
   if (old.media !== next.media) { start(S.query, { keepTab: true }); return; }
+  for (const p of Object.values(S.per)) { p.lean = 0; p.autoStop = false; }
 
   const after = activeSources(next);
   for (const src of after) {

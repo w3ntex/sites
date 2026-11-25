@@ -17,6 +17,19 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.1 (fixes):**
+* **Hstream and Rule34Video work again.** Both sites changed their markup: attributes on their own lines, double spaces, lazy images. The parsers now accept any spacing and attribute order, and Rule34Video results also get views and rating.
+* **Danbooru no longer loads forever.**
+  * With a strict filter (e.g. Vidéos on an image site), every page added one or two results and infinite scroll fetched the next one again and again.
+  * Infinite scroll now pauses after two pages that add almost nothing, and the "Charger plus" button takes over.
+  * Danbooru pages are 60 posts. Tags are resolved once and remembered.
+  * When Danbooru's autocomplete is blocked (anti-bot page), multi-word searches use each word instead of a made-up tag.
+  * Danbooru .gif files open in the viewer as images.
+* **Face ID** starts by itself when the app opens or comes back. A refused automatic attempt is silent, and the screen stays a tap target.
+  * The passkey request is limited to this device (`transports: ['internal']`, `hints: ['client-device']`), so there is no "other device" option.
+  * Réglages → Sécurité → *Recréer la clé Face ID* saves a new key, e.g. in Apple's Passwords instead of Chrome, whose extra step showed up at each unlock.
+  * iOS 18's "Require Face ID" doesn't apply to Home Screen web apps, so iOS's own "Se connecter" confirmation stays: one tap, then Face ID.
+
 **v2.7 (Musique tab, home, transitions):**
 * **Five tabs**: Accueil, Musique, Favoris, Historique, Réglages.
   * The tab bar floats, glass-like, with a highlight that slides to the active tab.

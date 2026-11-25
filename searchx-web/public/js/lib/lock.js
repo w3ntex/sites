@@ -58,6 +58,7 @@ async function createCredential() {
       challenge: randomBytes(32),
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
       authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+      hints: ['client-device'], // this iPhone only (browsers that don't know hints ignore them)
       timeout: 60000,
       attestation: 'none'
     }
@@ -71,7 +72,7 @@ export let authBusy = false;
 
 /**
  * Prompts Face ID / Touch ID for the stored passkey (iOS offers the device passcode as fallback).
- * Must be called synchronously from a tap: navigator.credentials.get() is the first thing it does.
+ * Best called synchronously from a tap: navigator.credentials.get() is the first thing it does.
  */
 export function verifyBiometrics(id, signal) {
   authBusy = true;
@@ -82,8 +83,10 @@ export function verifyBiometrics(id, signal) {
       publicKey: {
         challenge: randomBytes(32),
         rpId: location.hostname,
-        allowCredentials: [{ type: 'public-key', id: fromB64url(id), transports: ['internal', 'hybrid'] }],
+        // This iPhone's key only: no "other device / QR code" choices in the iOS sheet.
+        allowCredentials: [{ type: 'public-key', id: fromB64url(id), transports: ['internal'] }],
         userVerification: 'required',
+        hints: ['client-device'],
         timeout: 30000
       }
     });

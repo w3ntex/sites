@@ -409,7 +409,9 @@ const OPEN_TEXT = {
 };
 
 function Slide({ item, active, onZoom, onTap, onReveal }) {
-  if (item.type === 'image') return html`<${ZoomImage} item=${item} active=${active} onZoom=${onZoom} onTap=${onTap} />`;
+  // Animated .gif files (Danbooru, Rule34…) are pictures: shown like images, not "open on the site".
+  const gifFile = item.type === 'gif' && /\.gif(\?|$)/i.test(item.media || '');
+  if (item.type === 'image' || gifFile) return html`<${ZoomImage} item=${item} active=${active} onZoom=${onZoom} onTap=${onTap} />`;
   if (item.src === 'x' && !item.media && item.type !== 'image') return html`<${XVideo} item=${item} active=${active} onTap=${onReveal} />`;
   if (item.media && PLAYABLE.test(item.media)) return html`<${NativeVideo} item=${item} active=${active} onTap=${onReveal} />`;
   if (item.embed) return html`<${EmbedPlayer} item=${item} active=${active} autostart=${item.type === 'gif'} />`;

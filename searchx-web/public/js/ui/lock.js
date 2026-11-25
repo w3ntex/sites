@@ -38,9 +38,10 @@ export function LockScreen() {
 
   useEffect(() => () => ctrl.current?.abort(), []);
 
-  // Called straight from the tap (iOS only shows Face ID in response to a touch). A previous
-  // request can never block a new tap: it is cancelled first.
-  const bio = () => {
+  // From a tap, or on its own when the app opens (auto). A previous request can never block a new
+  // tap: it is cancelled first. An automatic attempt that iOS refuses (it may want a touch) stays
+  // silent: the whole screen remains a tap target.
+  const bio = ({ auto = false } = {}) => {
     if (!s.bioId) return;
     try { ctrl.current?.abort(); } catch { /* ignore */ }
     const c = new AbortController();
@@ -48,11 +49,37 @@ export function LockScreen() {
     setMsg('');
     setPrompting(true);
     verifyBiometrics(s.bioId, c.signal)
-      .then(ok => { if (ok) unlock(); else setMsg('Face ID a échoué.'); })
-      .catch(e => { if (ctrl.current === c) setMsg(describeAuthError(e)); })
+      .then(ok => { if (ok) unlock(); else if (!auto) setMsg('Face ID a échoué.'); })
+      .catch(e => { if (ctrl.current === c && !auto) setMsg(describeAuthError(e)); })
       .finally(() => { if (ctrl.current === c) setPrompting(false); });
-    haptic();
+    if (!auto) haptic();
   };
+
+  // Face ID straight away when the app opens or comes back to the screen (once each time: never
+  // again on its own after a cancel).
+  const tried = useRef(false);
+  useEffect(() => {
+    if (!s.bioId || showPin) return;
+    let timer = null;
+    const attempt = () => {
+      if (document.visibilityState !== 'visible' || tried.current) return;
+      tried.current = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => bio({ auto: true }), 280);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') attempt();
+      else { tried.current = false; clearTimeout(timer); }
+    };
+    attempt();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', attempt);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', attempt);
+    };
+  }, [showPin]);
 
   const check = async p => {
     if (await hashPin(p, s.pinSalt) === s.pinHash) { haptic(); unlock(); return; }
@@ -70,7 +97,7 @@ export function LockScreen() {
 
   const helpPanel = help && html`<div class="lock-help" onClick=${e => e.stopPropagation()}>
     <h3>Impossible d'entrer ?</h3>
-    ${s.bioId && html`<button type="button" class="btn" onClick=${bio}><${Icon} name="faceid" size=${18} /> Réessayer Face ID</button>`}
+    ${s.bioId && html`<button type="button" class="btn" onClick=${() => bio()}><${Icon} name="faceid" size=${18} /> Réessayer Face ID</button>`}
     ${s.pinHash && html`<button type="button" class="btn ghost" onClick=${() => { setHelp(false); setShowPin(true); }}>Utiliser le code SearchX</button>`}
     ${!confirmReset
       ? html`<button type="button" class="btn ghost danger-text" onClick=${() => setConfirmReset(true)}>Réinitialiser SearchX…</button>`
@@ -85,7 +112,7 @@ export function LockScreen() {
   if (s.bioId && !showPin) {
     return html`<div class="lock-screen">
       ${isNeon() && html`<${Petals} count=${6} />`}
-      <button type="button" class="lock-tap" onClick=${bio} aria-label="Déverrouiller avec Face ID">
+      <button type="button" class="lock-tap" onClick=${() => bio()} aria-label="Déverrouiller avec Face ID">
         <div class="lock-top">
           <div class=${cx('lock-icon big', prompting && 'pulse')}><${Icon} name="faceid" size=${44} stroke=${1.7} /></div>
           ${isNeon() && html`<p class="lock-kicker" lang="ja">ロック中</p>`}
@@ -112,7 +139,7 @@ export function LockScreen() {
       ${msg && html`<p class="lock-msg">${msg}</p>`}
     </div>
     <${PinPad} value=${pin} error=${error} onDigit=${digit} onDelete=${() => { haptic(); setPin(pin.slice(0, -1)); }}
-      extraKey=${s.bioId ? html`<button type="button" class="pin-bio" aria-label="Face ID" onClick=${bio}><${Icon} name="faceid" size=${30} /></button>` : null} />
+      extraKey=${s.bioId ? html`<button type="button" class="pin-bio" aria-label="Face ID" onClick=${() => bio()}><${Icon} name="faceid" size=${30} /></button>` : null} />
     <div class="lock-links">
       <button type="button" class="text-btn muted-btn" onClick=${() => { haptic(); setHelp(true); }}>Code oublié ?</button>
     </div>

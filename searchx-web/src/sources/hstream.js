@@ -30,15 +30,18 @@ export function hstreamUrl({ q, page = 1, sort = 'relevance' }) {
   return `${BASE}/search?${p}`;
 }
 
+// The markup changes now and then (attributes on their own lines since November 2026): every pattern
+// accepts any spacing and attribute order.
 export function parseHstream(html) {
   const items = [];
-  const parts = String(html || '').split(/<div wire:key="episode-\d+">/).slice(1);
+  const parts = String(html || '').split(/<div\s+wire:key="episode-\d+"[^>]*>/).slice(1);
   for (const raw of parts) {
-    const block = raw.split(/<div wire:key="episode-/)[0];
-    const href = (/<a href="(https:\/\/hstream\.moe\/hentai\/([a-z0-9-]+))"/i.exec(block) || []);
+    const block = raw.split(/<div\s+wire:key="episode-/)[0];
+    const href = (/<a\b[^>]*?\bhref="((?:https:\/\/hstream\.moe)?\/hentai\/([a-z0-9-]+))"/i.exec(block) || []);
     if (!href[1]) continue;
-    const img = (/<img[^>]+src="([^"]+)"/i.exec(block) || [])[1];
-    const title = stripTags((/<h3[^>]*>([\s\S]*?)<\/h3>/i.exec(block) || [])[1] || decodeEntities((/alt="([^"]+)"/.exec(block) || [])[1] || ''));
+    const img = (/<img\b[^>]*?\bsrc="([^"]+)"/i.exec(block) || [])[1];
+    const alt = (/<img\b[^>]*?\balt="([^"]+)"/i.exec(block) || [])[1] || '';
+    const title = stripTags((/<h3[^>]*>([\s\S]*?)<\/h3>/i.exec(block) || [])[1] || decodeEntities(alt));
     const quality = stripTags((/rounded-full bg-black\/70[^>]*>([\s\S]*?)<\/div>/i.exec(block) || [])[1] || '').toLowerCase();
     const stats = [...block.matchAll(/fa-(eye|heart)[^<]*<\/i>\s*([\d.,]+[kKmM]?)/g)];
     const views = compactNumber((stats.find(s => s[1] === 'eye') || [])[2]);
@@ -52,7 +55,7 @@ export function parseHstream(html) {
       views,
       rating: null,
       likes,
-      url: href[1],
+      url: absUrl(href[1], BASE),
       type: 'video',
       media: null,
       embed: null, // hstream refuses to be shown inside another site: opened on hstream.moe

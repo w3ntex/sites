@@ -159,3 +159,77 @@ test('Yande.re: tag resolution and parser', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.items.length, 5);
 });
+
+// Formats seen on the live sites in November 2026: attributes on their own lines (Hstream), two spaces
+// before title= and lazy images with a placeholder src (Rule34Video).
+test('Hstream: current markup (multi-line tags)', () => {
+  const block = i => `<div
+                    wire:key="episode-${2000 + i}">
+    <div class="group w-full p-1">
+    <a
+        href="https://hstream.moe/hentai/sample-show-${i}"
+        class="block overflow-hidden rounded-2xl"
+    >
+        <div class="relative overflow-hidden">
+            <!--[if BLOCK]><![endif]-->                                <img
+                    src="/images/hentai/sample-show/gallery-ep-${i}-0-thumbnail.webp"
+                    alt="Sample Show - ${i}"
+                    loading="lazy"
+                    data-gallery='["\\/images\\/x.webp"]'
+                    class="preview-gallery aspect-video"
+                >
+            <div class="ml-auto rounded-full bg-black/70 px-2 py-1 text-[11px]">
+                    4k | FHD 48fps
+                </div>
+                <h3 class=" text-sm font-semibold">
+                    Sample Show - ${i}
+                </h3>
+                        <span class="flex items-center gap-1">
+                            <i class="fa-regular fa-eye text-neutral-200 font-bold"></i>
+                            98k
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <i class="fa-regular fa-heart text-neutral-200 font-bold"></i>
+                            226
+                        </span>
+    </a>
+</div></div>
+`;
+  const items = parseHstream(`<html><body>${block(1)}${block(2)}</body></html>`);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].url, 'https://hstream.moe/hentai/sample-show-1');
+  assert.equal(items[0].thumb, 'https://hstream.moe/images/hentai/sample-show/gallery-ep-1-0-thumbnail.webp');
+  assert.equal(items[0].title, 'Sample Show - 1');
+  assert.equal(items[0].h, 2160);
+  assert.equal(items[0].views, 98000);
+  assert.equal(items[0].likes, 226);
+});
+
+test('Rule34Video: current markup (double spaces, lazy images, views and rating)', () => {
+  const card = (id, lazy) => `<div class="item thumb video_1   " data-video-card-id="${id}" >
+								<a class="th" href="https://rule34video.com/video/${id}/sample/"  title="Sample &amp; co">
+					<div class="img wrap_image" data-watched-label="Watched" data-preview="https://rule34video.com/get_file/47/abc/${id}/${id}_preview.mp4/">
+						${lazy
+    ? `<img class="thumb rd-lz" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP" data-rd-src="https://rule34video.com/contents/videos_screenshots/1/${id}/336x189/1.jpg" alt="Sample" width="320" height="180" loading="lazy"/>`
+    : `<img class="thumb" src="https://rule34video.com/contents/videos_screenshots/1/${id}/336x189/3.jpg" alt="Sample" width="320" height="180" loading="eager"/>`}
+						<div class="quality"><svg class="custom-svg custom-hd"></svg></div>
+						<div class="time">2:37</div>
+					</div>
+					<div class="thumb_title">Sample</div>
+						<div class="rating video-card-meta__item"> <svg></svg>
+							96% (78)
+						</div>
+						<div class="views video-views-count" title="Views: 237K" aria-label="Views: 237K"> 237K </div>
+				</a>
+							</div>
+`;
+  const items = parseR34Video(`<html><body>${card(4213254, false)}${card(4440929, true)}</body></html>`);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].url, 'https://rule34video.com/video/4213254/sample/');
+  assert.equal(items[0].title, 'Sample & co');
+  assert.equal(items[0].dur, 157);
+  assert.equal(items[0].views, 237000);
+  assert.equal(items[0].rating, 96);
+  assert.equal(items[1].thumb, 'https://rule34video.com/contents/videos_screenshots/1/4440929/336x189/1.jpg', 'lazy image: the real picture, not the placeholder');
+  assert.equal(items[1].embed, 'https://rule34video.com/embed/4440929');
+});

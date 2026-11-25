@@ -183,6 +183,16 @@ export function SettingsTab() {
       toast(e?.name === 'NotAllowedError' ? 'Face ID annulé.' : `Face ID indisponible : ${e?.message || e}`);
     }
   };
+  // A new key (e.g. into Apple's Passwords instead of Chrome, which adds its own steps to each unlock).
+  const renewBio = async () => {
+    try {
+      const id = await registerBiometrics();
+      updateSettings({ bioId: id });
+      toast('Nouvelle clé Face ID enregistrée');
+    } catch (e) {
+      toast(e?.name === 'NotAllowedError' ? 'Annulé : l’ancienne clé reste active.' : `Face ID indisponible : ${e?.message || e}`);
+    }
+  };
   const setIcon = key => {
     haptic();
     updateSettings({ installIcon: key });
@@ -231,11 +241,14 @@ export function SettingsTab() {
       </div>
 
       <${Group} title="Sécurité" footer=${bioOK
-          ? "Face ID est demandé à l'ouverture et à chaque retour dans l'app. Si Face ID échoue, iOS propose le code de ton iPhone."
+          ? "Face ID se lance tout seul à l'ouverture et à chaque retour dans l'app. iOS affiche alors sa fenêtre « Se connecter » : un seul bouton à toucher, puis Face ID. Si Face ID échoue, iOS propose le code de ton iPhone."
           : "Face ID n'est pas disponible dans ce navigateur : installe l'app sur l'écran d'accueil depuis Safari pour l'utiliser."}>
         <${Row} icon="faceid" iconColor="#30a46c" title="Face ID à l'ouverture"
           subtitle=${bioOK ? null : 'Indisponible ici'}
           right=${html`<${Switch} checked=${Boolean(s.bioId)} disabled=${!bioOK && !s.bioId} onChange=${setBio} label="Face ID" />`} />
+        ${s.bioId && bioOK && html`<${Row} icon="refresh" iconColor="#30a46c" title="Recréer la clé Face ID" chevron
+          subtitle="Si l'iPhone parle de Chrome au déverrouillage : recrée-la et choisis « Mots de passe »."
+          onClick=${renewBio} />`}
         <${Row} icon="lock" iconColor="#e5484d" title="Code SearchX" subtitle=${s.bioId ? 'Code à 4 chiffres en plus de Face ID' : 'Code à 4 chiffres'}
           right=${html`<${Switch} checked=${Boolean(s.pinHash)} onChange=${setPinEnabled} label="Code" />`} />
         ${lockEnabled() && html`<${Row} icon="timer" iconColor="#8e4ec6" title="Verrouiller" chevron

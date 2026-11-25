@@ -7,7 +7,7 @@ import { load, save } from './lib/storage.js';
 import { redditUrls, parseRedditListing, mergeRedditResults } from './shared/reddit.js';
 import {
   epornerSearchUrl, parseEporner, epornerMore, pullpushUrl, parsePullPush,
-  danbooruAutocompleteUrl, parseDanbooruAutocomplete, danbooruPostsUrl, parseDanbooru,
+  danbooruTags, danbooruPostsUrl, parseDanbooru, danbooruMore,
   redgifsRelayUrl, parseRedGifs, redgifsMore
 } from './shared/apis.js';
 import { isItemAllowed, isQueryAllowed } from './shared/safety.js';
@@ -164,25 +164,16 @@ export async function testRelay(base) {
 
 /** Danbooru allows calls from any page: words → tags with its autocomplete, then the posts. */
 async function danbooruDirect(p, signal) {
-  const raw = String(p.q || '').trim().toLowerCase();
-  const resolve = async term => {
+  const tags = await danbooruTags(p.q, async url => {
     try {
-      const list = parseDanbooruAutocomplete(await directJSON(danbooruAutocompleteUrl(term), signal));
-      return (list.find(t => t.tag === term.replace(/\s+/g, '_')) || list[0] || {}).tag || term.replace(/\s+/g, '_');
+      return await directJSON(url, signal);
     } catch (e) {
-      if (signal?.aborted) throw e;
-      return term.replace(/\s+/g, '_');
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      throw e;
     }
-  };
-  let tags;
-  if (raw.includes(',')) tags = raw.split(',').map(t => t.trim().replace(/\s+/g, '_')).filter(Boolean).slice(0, 2);
-  else {
-    const words = raw.split(/\s+/).filter(Boolean);
-    const joined = await resolve(raw);
-    tags = words.length <= 1 || joined.split('_').length >= words.length ? [joined] : await Promise.all(words.slice(0, 2).map(resolve));
-  }
+  });
   const posts = await directJSON(danbooruPostsUrl({ tags, page: p.page }), signal);
-  return { items: parseDanbooru(posts), more: Array.isArray(posts) && posts.length >= 90, tags };
+  return { items: parseDanbooru(posts), more: danbooruMore(posts), tags };
 }
 
 async function epornerDirect(p, signal) {

@@ -162,11 +162,49 @@ export function parseDanbooruAutocomplete(list) {
     .sort((a, b) => b.count - a.count);
 }
 
+// 60 posts per page: lighter on a phone than 100, and the next page comes sooner.
+export const DANBOORU_LIMIT = 60;
+
 export function danbooruPostsUrl({ tags, page = 1 }) {
   const t = tags.slice(0, 2);
   if (t.length < 2) t.push('rating:e');
-  const p = new URLSearchParams({ tags: t.join(' '), limit: '100', page: String(page) });
+  const p = new URLSearchParams({ tags: t.join(' '), limit: String(DANBOORU_LIMIT), page: String(page) });
   return `${DANBOORU}/posts.json?${p}`;
+}
+
+export function danbooruMore(posts) {
+  return Array.isArray(posts) && posts.length >= DANBOORU_LIMIT - 5;
+}
+
+const tagCache = new Map(); // typed words → tag ('' none found, null autocomplete unavailable)
+
+/**
+ * Typed words → real Danbooru tags with the site's autocomplete ("big breasts" → large_breasts),
+ * remembered so that the next pages don't ask again. When the autocomplete is unavailable (Danbooru's
+ * anti-bot page), each word is used as a tag rather than gluing them into a tag that does not exist.
+ */
+export async function danbooruTags(q, fetchJSON) {
+  const raw = String(q || '').trim().toLowerCase();
+  if (raw.includes(',')) return raw.split(',').map(t => t.trim().replace(/\s+/g, '_')).filter(Boolean).slice(0, 2);
+  const plain = term => term.replace(/\s+/g, '_');
+  const resolve = async term => {
+    if (tagCache.has(term)) return tagCache.get(term);
+    let tag = null;
+    try {
+      const list = parseDanbooruAutocomplete(await fetchJSON(danbooruAutocompleteUrl(term)));
+      tag = (list.find(t => t.tag === plain(term)) || list[0] || {}).tag || '';
+    } catch (e) {
+      if (e?.name === 'AbortError') throw e;
+    }
+    tagCache.set(term, tag);
+    return tag;
+  };
+  const words = raw.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [(await resolve(raw)) || plain(raw)];
+  const joined = await resolve(words.join(' '));
+  if (joined && joined.split('_').length >= words.length) return [joined];
+  const each = await Promise.all(words.slice(0, 2).map(resolve));
+  return words.slice(0, 2).map((w, i) => each[i] || plain(w));
 }
 
 function variant(p, type) {

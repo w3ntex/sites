@@ -1442,3 +1442,7 @@ html.vt-theme::view-transition-new(root) { z-index: 2; }
 @media (prefers-reduced-motion: reduce) {
   [data-theme] .app::before, .app::after, .np-disc, .mo-vinyl { animation: none !important; }
 }
+
+/* v2.7.1 — infinite scroll paused: why */
+.list-end .list-note { margin: 0 0 10px; font-size: 13px; color: var(--text-3); text-align: center; }
+.list-end:has(.list-note) { flex-direction: column; }
