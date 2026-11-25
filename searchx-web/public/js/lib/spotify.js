@@ -312,6 +312,7 @@ function apiError(status, data) {
     return new SpotifyError('user', 'Ton compte Spotify n’est pas autorisé par ton app : dans ton app Spotify → User Management, ajoute l’e-mail de ton compte.', status);
   }
   if (status === 403 && /scope/i.test(message)) return new SpotifyError('scope', 'Reconnecte Spotify pour autoriser cette partie (playlists, titres récents).', status);
+  if (status === 403 && (reason === 'VOLUME_CONTROL_DISALLOW' || /volume/i.test(message))) return new SpotifyError('volume', 'Spotify ne laisse pas régler le volume de cet appareil.', status);
   if (status === 403) return new SpotifyError('restricted', 'Spotify ne permet pas cette action maintenant.', status);
   if (status === 404 && /device/i.test(`${reason} ${message}`)) return new SpotifyError('device', 'Aucun appareil Spotify actif : ouvre Spotify et lance une musique.', status);
   if (status === 404) return new SpotifyError('missing', 'Spotify ne trouve pas cet élément.', status);
@@ -321,7 +322,7 @@ function apiError(status, data) {
 
 let backoffUntil = 0;
 
-async function api(path, { method = 'GET', query = null, body = undefined, retry = true, signal } = {}) {
+async function api(path, { method = 'GET', query = null, body = undefined, retry = true, signal, keepalive = false } = {}) {
   const token = await accessToken();
   if (!token) throw new SpotifyError('auth', 'Spotify n’est pas connecté.');
   const url = `${API}${path}${query ? `?${new URLSearchParams(query)}` : ''}`;
@@ -330,6 +331,7 @@ async function api(path, { method = 'GET', query = null, body = undefined, retry
     res = await fetch(url, {
       method,
       signal,
+      keepalive, // still sent when the app is leaving the screen
       headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined
     });
@@ -339,7 +341,7 @@ async function api(path, { method = 'GET', query = null, body = undefined, retry
   }
   if (res.status === 401 && retry) {
     await accessToken(true);
-    return api(path, { method, query, body, retry: false, signal });
+    return api(path, { method, query, body, retry: false, signal, keepalive });
   }
   if (res.status === 429) {
     const wait = Math.min(60, Number(res.headers.get('Retry-After')) || 5);
@@ -370,7 +372,13 @@ export function slimPlayback(d, now = Date.now()) {
     at: now,
     shuffle: Boolean(d.shuffle_state),
     repeat: d.repeat_state || 'off',
-    device: d.device ? { id: d.device.id || null, name: d.device.name || '', type: d.device.type || '', volume: d.device.volume_percent ?? null } : null,
+    device: d.device ? {
+      id: d.device.id || null,
+      name: d.device.name || '',
+      type: d.device.type || '',
+      volume: d.device.volume_percent ?? null,
+      canVolume: Boolean(d.device.supports_volume) // false for iPhones: Spotify cannot set their volume
+    } : null,
     disallows: d.actions?.disallows || {},
     track: it ? {
       id: it.id || '',
@@ -700,6 +708,14 @@ export async function playItems({ uris = null, contextUri = '', offsetUri = '', 
     await api('/me/player/play', { method: 'PUT', body, query: { device_id: target.id } });
   }
   settle([500, 1500]);
+}
+
+/** Volume of a Spotify device (0–100). Spotify refuses it for iPhones ("volume" error). */
+export async function setVolume(percent, deviceId = '', { keepalive = false } = {}) {
+  const v = Math.max(0, Math.min(100, Math.round(percent)));
+  await api('/me/player/volume', { method: 'PUT', query: deviceId ? { volume_percent: v, device_id: deviceId } : { volume_percent: v }, keepalive });
+  const p = music.playback;
+  if (p?.device && (!deviceId || p.device.id === deviceId)) setMusic({ playback: { ...p, device: { ...p.device, volume: v } } });
 }
 
 export async function setShuffle(on) {

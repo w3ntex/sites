@@ -7,7 +7,7 @@ import { SOURCES, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, MODES, modeO
 import { clearRecent, disableSources, enableSource } from '../search.js';
 import { switchMode } from './search-tab.js';
 import { RelaySheet } from './relay.js';
-import { SpotifySheet, MixRow } from './music.js';
+import { SpotifySheet, MixRow, BoostRow } from './music.js';
 import { useMusic } from '../lib/spotify.js';
 import { clearHistory, exportData, importData } from '../library.js';
 import { searchSource, health, resetDirect } from '../api.js';
@@ -152,7 +152,7 @@ function MusicGroup() {
   const m = useMusic();
   const s = state.settings;
   const now = m.playback?.track;
-  return html`<${Group} title="Musique" footer="Pendant une vidéo, ta musique continue au même volume : iOS réserve la baisse automatique (comme sur Reddit) aux apps de l’App Store. Astuce : dans Spotify → Paramètres et confidentialité → Lecture, mets le niveau du volume sur « Faible » : la musique restera plus douce que les vidéos. La vraie Dynamic Island est aussi réservée aux apps de l’App Store : SearchX ajoute sa propre île juste autour.">
+  return html`<${Group} title="Musique" footer="iOS réserve aux apps de l’App Store (comme Reddit) le droit de baisser la musique d’une autre app : sur l’iPhone, SearchX fait donc passer la vidéo au-dessus. Ça marche dans le lecteur de SearchX quand le site laisse lire le son de ses fichiers (X par exemple), pas dans les lecteurs des sites. Pour une musique encore plus douce : Spotify → Paramètres et confidentialité → Lecture → Niveau du volume « Faible ». La vraie Dynamic Island est aussi réservée aux apps de l’App Store : SearchX ajoute sa propre île juste autour.">
     <${Row} icon="spotify" iconColor="#1db954" title="Spotify" chevron
       subtitle=${m.connected ? (now ? `${now.name} · ${now.artist}` : 'Connecté · rien en lecture') : 'Contrôle ta musique depuis SearchX (Premium)'}
       right=${m.connected ? 'Connecté' : m.pending ? 'En cours…' : 'À connecter'}
@@ -160,6 +160,7 @@ function MusicGroup() {
     ${m.connected && html`<${Row} icon="music" iconColor="#1db954" title="Île musicale" subtitle="En haut de l’écran ; touche-la pour les commandes."
       right=${html`<${Switch} checked=${s.musicIsland} onChange=${v => updateSettings({ musicIsland: v })} label="Île musicale" />`} />`}
     <${MixRow} inGroup />
+    <${BoostRow} inGroup />
   <//>`;
 }
 

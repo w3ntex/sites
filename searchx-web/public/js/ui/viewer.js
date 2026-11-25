@@ -10,25 +10,42 @@ import { haptic } from '../lib/haptics.js';
 import { duration, compact } from '../lib/format.js';
 import { load, save } from '../lib/storage.js';
 import { prepareVideoSound, resetVideoSound } from '../lib/audio.js';
+import { BOOST_AVAILABLE, wakeBoost, sleepBoost, boostRoute, attachBoost, watchBoost, boostFailed } from '../lib/boost.js';
+import { setVideoAudible } from '../lib/duck.js';
 
 // ---------- shared video player ----------
 // One <video> element serves every slide. iOS only lets a page play sound after a tap and remembers
 // it per element: this element is unlocked by the tap that opens the viewer, then moves from slide to
 // slide, so videos keep their sound while swiping (and only one video decodes at a time).
+// A second element, "boosted", plays the files whose sound can go through Web Audio to come above the
+// music (lib/boost.js). The same tap unlocks it; one of the two is in use at a time.
 
 let player = null;
 
-function getPlayer() {
-  if (player) return player;
+const EVENTS = ['timeupdate', 'durationchange', 'progress', 'play', 'pause', 'playing', 'waiting', 'canplay', 'loadeddata', 'ended', 'volumechange', 'error', 'seeked'];
+const SOUND_EVENTS = new Set(['play', 'playing', 'pause', 'ended', 'volumechange', 'owner']);
+
+function makeVideo(boosted) {
   const v = document.createElement('video');
   v.className = 'vvideo';
   v.playsInline = true;
   v.setAttribute('playsinline', '');
   v.setAttribute('webkit-playsinline', '');
   v.preload = 'auto';
+  // Web Audio only hears a file fetched with CORS (without it, the sound would come out silent).
+  if (boosted) v.crossOrigin = 'anonymous';
+  return v;
+}
+
+function getPlayer() {
+  if (player) return player;
+  const plain = makeVideo(false);
+  const boosted = BOOST_AVAILABLE ? makeVideo(true) : null;
   const listeners = new Set();
   player = {
-    el: v,
+    el: plain,           // the element in use
+    plain,
+    boosted,
     owner: null,         // id of the item it shows
     gif: false,
     sound: null,         // the user's sound choice in this viewer (null: settings)
@@ -36,22 +53,32 @@ function getPlayer() {
     on(l) { listeners.add(l); return () => listeners.delete(l); },
     emit(type) { for (const l of listeners) l(type); }
   };
-  for (const ev of ['timeupdate', 'durationchange', 'progress', 'play', 'pause', 'playing', 'waiting', 'canplay', 'loadeddata', 'ended', 'volumechange', 'error', 'seeked']) {
-    v.addEventListener(ev, () => player.emit(ev));
+  for (const v of [plain, boosted]) {
+    if (!v) continue;
+    for (const ev of EVENTS) v.addEventListener(ev, () => { if (player.el === v) player.emit(ev); });
   }
+  // Spotify playing on another device goes down while a video plays with sound (lib/duck.js).
+  player.on(type => {
+    if (!SOUND_EVENTS.has(type)) return;
+    const v = player.el;
+    setVideoAudible('player', Boolean(player.owner) && !v.paused && !v.ended && !v.muted);
+  });
   return player;
 }
 
-/** Called during the tap that opens the viewer: lifts iOS's "tap needed for sound" for the player. */
+/** Called during the tap that opens the viewer: lifts iOS's "tap needed for sound" for the players. */
 function unlockPlayer(p) {
-  const v = p.el;
+  wakeBoost();
   if (p.owner) return;
-  try {
-    v.muted = true;
-    const r = v.play(); // no source yet, nothing plays
-    if (r?.catch) r.catch(() => {});
-    v.pause();
-  } catch { /* ignore */ }
+  for (const v of [p.plain, p.boosted]) {
+    if (!v) continue;
+    try {
+      v.muted = true;
+      const r = v.play(); // no source yet, nothing plays
+      if (r?.catch) r.catch(() => {});
+      v.pause();
+    } catch { /* ignore */ }
+  }
 }
 
 function wantsSound(p) {
@@ -79,6 +106,7 @@ async function playMedia(p) {
 
 function togglePlay(p) {
   const v = p.el;
+  wakeBoost(); // a tap: the audio context may start again (after a call, Siri…)
   if (v.paused || v.ended) playMedia(p);
   else v.pause();
 }
@@ -86,20 +114,37 @@ function togglePlay(p) {
 function setSound(p, on) {
   p.sound = on;
   p.soundBlocked = false;
+  wakeBoost();
   if (on) prepareVideoSound();
   p.el.muted = !on;
   if (on && p.owner && p.el.paused && !p.el.ended) p.el.play().catch(() => {});
   p.emit('volumechange');
 }
 
-function mountMedia(p, box, item, { autoplay, gif }) {
-  const v = p.el;
+function stopVideo(v) {
+  v.pause();
+  v.remove();
+  v.removeAttribute('src');
+  try { v.load(); } catch { /* ignore */ }
+}
+
+/** Shows the item in the player: the boosted element when `boost` (and its sound graph is ready). */
+function mountMedia(p, box, item, { autoplay, gif, boost = false, at = 0 }) {
+  const v = boost && p.boosted && attachBoost(p.boosted) ? p.boosted : p.plain;
+  if (p.el !== v) {
+    stopVideo(p.el);
+    p.el = v;
+    p.owner = null;
+  }
   if (p.owner !== item.id) {
     p.owner = item.id;
     p.gif = gif;
     v.loop = gif;
-    v.poster = item.thumb || '';
+    // With crossOrigin, the poster would need CORS too: the picture under the player shows it instead.
+    if (v === p.boosted) v.removeAttribute('poster');
+    else v.poster = item.thumb || '';
     v.src = item.media;
+    if (at > 0) v.addEventListener('loadedmetadata', () => { try { v.currentTime = at; } catch { /* ignore */ } }, { once: true });
   }
   if (v.parentNode !== box) box.appendChild(v);
   p.emit('owner');
@@ -109,12 +154,8 @@ function mountMedia(p, box, item, { autoplay, gif }) {
 
 function releaseMedia(p, id) {
   if (!p || p.owner !== id) return;
-  const v = p.el;
   p.owner = null;
-  v.pause();
-  v.remove();
-  v.removeAttribute('src');
-  try { v.load(); } catch { /* ignore */ }
+  stopVideo(p.el);
   p.emit('owner');
 }
 
@@ -166,22 +207,53 @@ function NativeVideo({ item, active, onTap }) {
   const isGif = item.type === 'gif';
   const [failed, setFailed] = useState(false);
   const [st, setSt] = useState({ loading: false, paused: true });
+  const [deciding, setDeciding] = useState(false); // first file of a site: may its sound be boosted?
 
   useLayoutEffect(() => {
     if (!active || failed || !box.current) return;
     const p = getPlayer();
+    const autoplay = !isGif || state.settings.autoplayGifs;
+    let live = true;
+    let unwatch = null;
     const sync = type => {
       if (p.owner !== item.id) return;
-      if (type === 'error') { setFailed(true); return; }
+      if (type === 'error') {
+        if (p.el === p.boosted) fallBack('error');
+        else setFailed(true);
+        return;
+      }
       const v = p.el;
       const paused = v.paused || v.ended;
       const loading = !paused && v.readyState < 3;
       setSt(s => (s.paused === paused && s.loading === loading ? s : { paused, loading }));
     };
+    const mount = (boost, opts = {}) => {
+      if (!live || !box.current) return;
+      setDeciding(false);
+      mountMedia(p, box.current, item, { autoplay, gif: isGif, boost, ...opts });
+      sync('mount');
+      unwatch?.();
+      unwatch = p.el === p.boosted ? watchBoost(p.el, fallBack) : null;
+    };
+    // The boosted element could not play this file well: same file, same moment, plain element.
+    function fallBack(reason) {
+      if (!live || p.owner !== item.id || p.el !== p.boosted) return;
+      boostFailed(item.media, reason);
+      const v = p.el;
+      const at = v.currentTime || 0;
+      const playing = !v.paused && !v.ended;
+      unwatch?.();
+      unwatch = null;
+      releaseMedia(p, item.id);
+      mount(false, { autoplay: playing || (reason === 'error' && autoplay), at });
+    }
     const off = p.on(sync);
-    mountMedia(p, box.current, item, { autoplay: !isGif || state.settings.autoplayGifs, gif: isGif });
-    sync('mount');
-    return () => { off(); releaseMedia(p, item.id); };
+    const route = boostRoute(item.media);
+    if (route && typeof route.then === 'function') {
+      setDeciding(true);
+      route.then(ok => mount(ok), () => mount(false));
+    } else mount(Boolean(route));
+    return () => { live = false; off(); unwatch?.(); releaseMedia(p, item.id); };
   }, [active, failed]);
 
   if (failed) {
@@ -201,8 +273,8 @@ function NativeVideo({ item, active, onTap }) {
   return html`<div class="vmedia" onClick=${onClick}>
     <img class="vposter-img" src=${item.thumb} alt="" referrerpolicy="no-referrer" draggable="false" />
     <div class="vplayer-slot" ref=${box}></div>
-    ${active && st.loading && html`<span class="vloading"><${Spinner} size=${28} /></span>`}
-    ${active && st.paused && !st.loading && html`<span class="vstate" aria-hidden="true"><${Icon} name="play" size=${34} /></span>`}
+    ${active && (st.loading || deciding) && html`<span class="vloading"><${Spinner} size=${28} /></span>`}
+    ${active && st.paused && !st.loading && !deciding && html`<span class="vstate" aria-hidden="true"><${Icon} name="play" size=${34} /></span>`}
   </div>`;
 }
 
@@ -222,6 +294,7 @@ function VideoBar({ item }) {
   const paint = (f = null) => {
     const el = seek.current;
     if (!el) return;
+    const v = p.el; // read now: the subscription below keeps the first render's paint, and the element may change
     const d = Number.isFinite(v.duration) ? v.duration : 0;
     const t = f != null ? f * d : v.currentTime;
     el.style.setProperty('--p', d ? String(Math.min(1, t / d)) : '0');
@@ -301,6 +374,13 @@ function EmbedPlayer({ item, active, autostart = false }) {
   const [playing, setPlaying] = useState(auto && active);
   const [sandbox, setSandbox] = useState(state.settings.sandbox);
   useEffect(() => { if (!active) setPlaying(false); else if (auto) setPlaying(true); }, [active]);
+  // A site's own player plays with sound: Spotify on another device goes down meanwhile (lib/duck.js).
+  useEffect(() => {
+    if (!playing || !active) return;
+    const key = `embed:${item.id}`;
+    setVideoAudible(key, true);
+    return () => setVideoAudible(key, false);
+  }, [playing, active]);
   if (!playing) {
     return html`<${Poster} item=${item}>
       <button type="button" class="vplay" aria-label="Lire" onClick=${e => { e.stopPropagation(); haptic(); prepareVideoSound(); setPlaying(true); }}>
@@ -464,6 +544,7 @@ export function Viewer() {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKey);
       resetVideoSound();
+      sleepBoost();
     };
   }, []);
 

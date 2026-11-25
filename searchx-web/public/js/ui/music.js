@@ -1,6 +1,6 @@
 import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
-import { cx, Sheet, Spinner, Switch } from './common.js';
+import { cx, Sheet, Spinner, Switch, Segmented } from './common.js';
 import { state, updateSettings, closeSheet, toast } from '../state.js';
 import { haptic } from '../lib/haptics.js';
 import { duration } from '../lib/format.js';
@@ -9,6 +9,7 @@ import {
   redirectUri, savedClientId, isClientId, SPOTIFY_DASHBOARD, spotifyOpenUrl
 } from '../lib/spotify.js';
 import { AUDIO_SESSION, applyAudioPolicy } from '../lib/audio.js';
+import { BOOST_AVAILABLE, applyBoostMix } from '../lib/boost.js';
 
 // ---------- the island ----------
 // iOS only lets native apps draw in the Dynamic Island (it shows Spotify's own controls there).
@@ -281,6 +282,7 @@ function Connected() {
         <span class="row-right"><${Switch} checked=${s.musicIsland} onChange=${v => updateSettings({ musicIsland: v })} label="Île musicale" /></span>
       </div>
       <${MixRow} />
+      <${BoostRow} />
     </div>
     <div class="sheet-buttons col">
       <button type="button" class="btn ghost danger-text" onClick=${() => { haptic(); disconnect(); toast('Spotify déconnecté'); }}>Déconnecter Spotify</button>
@@ -299,7 +301,33 @@ export function MixRow({ inGroup = false }) {
   return html`<div class=${cx('row', inGroup && 'in-group')}>
     ${inGroup && html`<span class="row-icon" style="background:#1db954"><${Icon} name="volume" size=${17} /></span>`}
     <span class="row-text"><span class="row-title">Musique pendant les vidéos</span><span class="row-sub">${sub}</span></span>
-    <span class="row-right"><${Switch} checked=${AUDIO_SESSION && s.musicMix} disabled=${!AUDIO_SESSION} onChange=${v => { updateSettings({ musicMix: v }); applyAudioPolicy(); }} label="Musique pendant les vidéos" /></span>
+    <span class="row-right"><${Switch} checked=${AUDIO_SESSION && s.musicMix} disabled=${!AUDIO_SESSION} onChange=${v => { updateSettings({ musicMix: v }); applyAudioPolicy(); applyBoostMix(); }} label="Musique pendant les vidéos" /></span>
+  </div>`;
+}
+
+const BOOST_OPTIONS = [['off', 'Non'], ['light', 'Léger'], ['medium', 'Moyen'], ['strong', 'Fort']];
+
+/**
+ * "Vidéo au-dessus de la musique": Spotify on another device is lowered during videos; on this phone,
+ * where iOS lets no web app lower another app, the video's sound is raised above the music.
+ */
+export function BoostRow({ inGroup = false }) {
+  const s = state.settings;
+  useMusic();
+  const level = s.videoBoost || 'medium';
+  const phone = BOOST_AVAILABLE && AUDIO_SESSION;
+  let sub;
+  if (level === 'off') sub = 'La vidéo et la musique gardent chacune leur volume.';
+  else if (!phone) sub = 'Spotify sur un ordi, une enceinte ou une TV baisse pendant les vidéos, puis revient.';
+  else if (!s.musicMix) sub = 'Spotify sur un ordi, une enceinte ou une TV baisse pendant les vidéos. Sur l’iPhone, la musique est coupée par les vidéos (option ci-dessus).';
+  else sub = 'Sur l’iPhone, iOS interdit aux web apps de baisser Spotify : SearchX monte donc le son de la vidéo au-dessus de la musique, sans saturer. Sur un ordi, une enceinte ou une TV, c’est Spotify qui baisse, puis revient.';
+  return html`<div class=${cx('row', 'boost-row', inGroup && 'in-group')}>
+    ${inGroup && html`<span class="row-icon" style="background:#1db954"><${Icon} name="sliders" size=${17} /></span>`}
+    <div class="row-text">
+      <span class="row-title">Vidéo au-dessus de la musique</span>
+      <span class="row-sub">${sub}</span>
+      <${Segmented} value=${level} options=${BOOST_OPTIONS} onChange=${v => { updateSettings({ videoBoost: v }); applyBoostMix(); }} />
+    </div>
   </div>`;
 }
 

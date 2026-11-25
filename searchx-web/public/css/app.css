@@ -1231,6 +1231,9 @@ html.sx-cover body::after { content: ""; position: fixed; inset: 0; z-index: 400
 .music-now-text b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .music-now-text span { font-size: 13px; color: var(--text-3); line-height: 1.35; }
 .music-opts { margin: 14px 0 4px; border-radius: 14px; overflow: hidden; background: var(--surface); }
+.boost-row { align-items: flex-start; }
+.boost-row .row-icon { margin-top: 2px; }
+.boost-row .segmented { margin-top: 9px; }
 
 /* =====================================================================================
    v2.7 — Musique tab, home button, transitions and visual polish

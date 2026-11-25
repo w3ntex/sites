@@ -9,6 +9,7 @@
 //
 // The mode is set as soon as the app opens and kept up to date (not only when a SearchX video starts):
 // the players of other sites shown inside the app (RedGIFs' own page, tube players) follow it too.
+// Since the music can't be lowered here, SearchX's own player raises the video above it (boost.js).
 import { state } from '../state.js';
 import { musicPlayingHere, onMusicChange } from './spotify.js';
 

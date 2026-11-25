@@ -12,6 +12,7 @@ import { followShared } from './search.js';
 import { searchXUsers } from './api.js';
 import { xUserFromShared } from './shared/xshare.js';
 import { AUDIO_SESSION, startAudioPolicy } from './lib/audio.js';
+import { startDuck } from './lib/duck.js';
 
 applyTheme(state.settings.mode);
 applyInstallIcon(state.settings.installIcon);
@@ -29,6 +30,8 @@ onConnected(() => {
 startMusic();
 // Music of other apps keeps playing during videos (Réglages → Musique), from the start.
 startAudioPolicy();
+// Spotify on another device (computer, speaker) goes down while a video plays with sound.
+startDuck();
 
 // X accounts shared from the X app: iOS Shortcut "SearchX" → this phone's mailbox → followed here.
 const serverHeaders = () => (state.settings.accessKey ? { 'x-sx-key': state.settings.accessKey } : {});

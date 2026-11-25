@@ -17,6 +17,19 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.8 (the video above the music):** Réglages → Musique → *Vidéo au-dessus de la musique*: Non / Léger / Moyen (default) / Fort. Also in the Musique tab's Spotify settings.
+* iOS gives web apps no way to lower another app's music. WebKit never asks for AVAudioSession's `duckOthers` option: "ambient" and "transient" both mix at full volume. The Spotify Web API can't set an iPhone's volume either (`supports_volume: false`, `VOLUME_CONTROL_DISALLOW`).
+* **Spotify playing on this iPhone: the video is raised instead** (`public/js/lib/boost.js`).
+  * While music may be playing, the SearchX player sends the video's sound through Web Audio: gain, compressor, limiter. Quiet videos get about +8 / +15 / +21 dB (Léger / Moyen / Fort), and loud ones stay below full scale, so nothing clips.
+  * When Spotify pauses, the video gets its own sound back within a few seconds, and the boost returns when the music does.
+  * Web Audio only hears files whose host allows it (CORS); otherwise the sound would come out silent. So a second `<video>` with `crossOrigin="anonymous"` plays only files from hosts that answered a HEAD request with CORS. The answer is remembered for 7 days (a refusal for 6 hours). X's `video.twimg.com` allows it.
+  * Everything else keeps the plain player, as before: hosts without CORS, HLS (`.m3u8`), and the sites' own embedded players.
+  * A watchdog switches to the plain player at the same moment if the boosted one stays frozen, or silent although the file has sound.
+* **Spotify playing on another device** (computer, speaker, TV) **is really lowered** while a video plays with sound, then put back (`public/js/lib/duck.js`).
+  * It keeps 60 / 40 / 25 % of the volume. Swiping to the next video doesn't bring it back up, and a volume changed by hand meanwhile is kept.
+  * The lowered device is saved, so it's put back even if the app is closed during a video.
+* Tests: the boost levels against WebKit's compressor curve, the ducking rules, and which files may be boosted.
+
 **v2.7.7:** The music of other apps is no longer cut by videos.
 * "Musique pendant les vidéos" is on by default, and switched on once for older settings.
 * The ambient audio session is applied as soon as the app opens and kept up to date (Spotify playing or not, return to the app). Before, it was set only when a SearchX video started.
@@ -226,5 +239,5 @@ npm run dev         # same, against the real sites
 * **Reddit**: the phone queries Reddit directly first, which looks like normal browsing. It falls back to the Worker only if that fails.
 * **Rule34** needs a free API key (rule34.xxx → My Account → Options → API Access Credentials).
 * **Downloads**: only direct files (RedGIFs, Rule34, Reddit) can be downloaded. Tube-site videos can't be saved.
-* **Spotify**: the remote needs Spotify Premium plus a developer app with the redirect URI `https://<your app>/api/spotify/callback`. Réglages → Musique → Spotify walks through it. Volume can't be changed remotely on an iPhone.
+* **Spotify**: the remote needs Spotify Premium plus a developer app with the redirect URI `https://<your app>/api/spotify/callback`. Réglages → Musique → Spotify walks through it. Volume can't be changed remotely on an iPhone, so during videos SearchX raises the video above the music there instead (v2.7.8).
 * **Separate data**: an app installed on the home screen keeps its own data, separate from Safari's. Export a backup before reinstalling or changing the icon.
