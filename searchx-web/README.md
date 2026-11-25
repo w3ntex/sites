@@ -17,6 +17,12 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.7:** The music of other apps is no longer cut by videos.
+* "Musique pendant les vidéos" is on by default, and switched on once for older settings.
+* The ambient audio session is applied as soon as the app opens and kept up to date (Spotify playing or not, return to the app). Before, it was set only when a SearchX video started.
+* So the players of other sites shown inside the app (RedGIFs' own page, tube players) mix with the music too.
+* iOS still doesn't let web apps lower ("duck") another app's music; "transient" mixes the same way. The Réglages → Musique footer suggests Spotify's "Niveau du volume : Faible" so the music stays softer than videos.
+
 **v2.7.6 (share an X profile to SearchX):**
 * In the X app, Profile → Partager → SearchX adds the account to the followed list. Sharing a post adds its author.
 * iOS doesn't let Home Screen web apps appear in the share sheet: WebKit has no Web Share Target. A Shortcut named "SearchX" does it instead.

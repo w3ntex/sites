@@ -8,7 +8,7 @@ import {
   useMusic, music, musicCommand, progressNow, beginConnect, cancelConnect, resumeConnect, disconnect,
   redirectUri, savedClientId, isClientId, SPOTIFY_DASHBOARD, spotifyOpenUrl
 } from '../lib/spotify.js';
-import { AUDIO_SESSION } from '../lib/audio.js';
+import { AUDIO_SESSION, applyAudioPolicy } from '../lib/audio.js';
 
 // ---------- the island ----------
 // iOS only lets native apps draw in the Dynamic Island (it shows Spotify's own controls there).
@@ -294,12 +294,12 @@ export function MixRow({ inGroup = false }) {
   const sub = !AUDIO_SESSION
     ? 'Pas disponible sur ce navigateur (iOS 17 ou plus récent nécessaire).'
     : m.connected
-      ? 'Ta musique continue pendant les vidéos, mélangée à leur son (seulement quand Spotify joue).'
-      : 'Ta musique continue pendant les vidéos, mélangée à leur son. En mode silencieux, le son des vidéos est alors coupé.';
+      ? 'Ta musique n’est plus coupée par les vidéos : elle continue, mélangée à leur son (quand Spotify joue).'
+      : 'Ta musique n’est plus coupée par les vidéos : elle continue, mélangée à leur son. En mode silencieux, le son des vidéos est alors coupé.';
   return html`<div class=${cx('row', inGroup && 'in-group')}>
     ${inGroup && html`<span class="row-icon" style="background:#1db954"><${Icon} name="volume" size=${17} /></span>`}
     <span class="row-text"><span class="row-title">Musique pendant les vidéos</span><span class="row-sub">${sub}</span></span>
-    <span class="row-right"><${Switch} checked=${AUDIO_SESSION && s.musicMix} disabled=${!AUDIO_SESSION} onChange=${v => updateSettings({ musicMix: v })} label="Musique pendant les vidéos" /></span>
+    <span class="row-right"><${Switch} checked=${AUDIO_SESSION && s.musicMix} disabled=${!AUDIO_SESSION} onChange=${v => { updateSettings({ musicMix: v }); applyAudioPolicy(); }} label="Musique pendant les vidéos" /></span>
   </div>`;
 }
 

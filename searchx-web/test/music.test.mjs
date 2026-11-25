@@ -156,3 +156,11 @@ test('Musique tab: tracks, playlists, albums and artists from the Web API', asyn
   assert.equal(slimArtist({ uri: 'spotify:artist:r', id: 'r', name: 'R', images: [] }).kind, 'artist');
   assert.equal(hasScopes(), true, 'unknown scopes: assume granted (errors tell otherwise)');
 });
+
+test('music keeps playing during videos by default', async () => {
+  const { DEFAULT_SETTINGS } = await import('../public/js/config.js');
+  const { state } = await import('../public/js/state.js');
+  assert.equal(DEFAULT_SETTINGS.musicMix, true);
+  assert.equal(state.settings.musicMix, true, 'older settings are switched on once');
+  assert.equal(state.settings.mixV, 2);
+});

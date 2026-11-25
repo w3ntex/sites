@@ -152,7 +152,7 @@ function MusicGroup() {
   const m = useMusic();
   const s = state.settings;
   const now = m.playback?.track;
-  return html`<${Group} title="Musique" footer="iOS réserve la vraie Dynamic Island aux apps installées depuis l’App Store : il y affiche les commandes de Spotify. SearchX ajoute sa propre île juste autour.">
+  return html`<${Group} title="Musique" footer="Pendant une vidéo, ta musique continue au même volume : iOS réserve la baisse automatique (comme sur Reddit) aux apps de l’App Store. Astuce : dans Spotify → Paramètres et confidentialité → Lecture, mets le niveau du volume sur « Faible » : la musique restera plus douce que les vidéos. La vraie Dynamic Island est aussi réservée aux apps de l’App Store : SearchX ajoute sa propre île juste autour.">
     <${Row} icon="spotify" iconColor="#1db954" title="Spotify" chevron
       subtitle=${m.connected ? (now ? `${now.name} · ${now.artist}` : 'Connecté · rien en lecture') : 'Contrôle ta musique depuis SearchX (Premium)'}
       right=${m.connected ? 'Connecté' : m.pending ? 'En cours…' : 'À connecter'}

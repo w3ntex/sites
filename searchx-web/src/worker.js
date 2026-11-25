@@ -30,7 +30,7 @@ import { Mailbox, handleInbox } from './inbox.js';
 // Durable Object classes (wrangler.jsonc → durable_objects): Spotify sign-in hand-over, shared X accounts.
 export { SpotifyHandoff, Mailbox };
 
-export const VERSION = '2.7.6';
+export const VERSION = '2.7.7';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).

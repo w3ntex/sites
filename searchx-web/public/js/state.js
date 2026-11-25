@@ -39,6 +39,12 @@ const settings = { ...DEFAULT_SETTINGS, ...savedSettings };
 if (!savedSettings.mode && (savedSettings.hentai === true || (savedSettings.hentai === undefined && savedSettings.theme === 'hentai'))) settings.mode = 'hentai';
 delete settings.hentai;
 delete settings.theme;
+// 2.7.7: the music keeps playing during videos by default (asked for); applied once to older settings.
+if (savedSettings.mixV !== 2) {
+  settings.musicMix = true;
+  settings.mixV = 2;
+  save('settings', settings);
+}
 
 /** The whole app state. Mutated in place by actions, then `notify()` re-renders. */
 export const state = {

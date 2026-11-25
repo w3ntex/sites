@@ -11,7 +11,7 @@ import { startInbox } from './lib/inbox.js';
 import { followShared } from './search.js';
 import { searchXUsers } from './api.js';
 import { xUserFromShared } from './shared/xshare.js';
-import { AUDIO_SESSION } from './lib/audio.js';
+import { AUDIO_SESSION, startAudioPolicy } from './lib/audio.js';
 
 applyTheme(state.settings.mode);
 applyInstallIcon(state.settings.installIcon);
@@ -27,6 +27,8 @@ onConnected(() => {
   toast(AUDIO_SESSION ? 'Spotify connecté · ta musique continue pendant les vidéos' : 'Spotify connecté');
 });
 startMusic();
+// Music of other apps keeps playing during videos (Réglages → Musique), from the start.
+startAudioPolicy();
 
 // X accounts shared from the X app: iOS Shortcut "SearchX" → this phone's mailbox → followed here.
 const serverHeaders = () => (state.settings.accessKey ? { 'x-sx-key': state.settings.accessKey } : {});
