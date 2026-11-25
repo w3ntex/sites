@@ -17,6 +17,24 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7 (Musique tab, home, transitions):**
+* **Five tabs**: Accueil, Musique, Favoris, Historique, Réglages.
+  * The tab bar floats, glass-like, with a highlight that slides to the active tab.
+  * Pages slide in from the side of the previous tab.
+* **Home**: the first tab is Accueil. Tapping it again, or the house button next to the search field, goes back to the welcome page.
+* **Musique tab** (Spotify Web API, the sound still comes from the Spotify app):
+  * Now playing: large cover on a blurred backdrop, seek, shuffle, previous/play/next, repeat, "J'aime", device picker (transfer), queue ("À suivre"), open in Spotify.
+  * Playlists, including "Titres likés" when readable. Playlist and album pages with Lecture / Aléatoire.
+  * Récents: plays a track in its playlist or album when it came from one.
+  * Spotify search: tracks, artists, albums, playlists, and add to queue.
+  * If nothing is active, a play request starts on the phone's Spotify.
+  * Playlists use `/playlists/{id}/items` (February 2026) and fall back to `/tracks`.
+  * The tab shows the sign-in steps when Spotify isn't connected, with "Coller" buttons.
+  * New scopes (`playlist-read-*`, `user-read-recently-played`): older sign-ins get an "Autoriser" banner.
+* **Theme change**: the new theme spreads in a circle from the finger (View Transitions, Safari 18+; a coloured wipe on older versions).
+  * Sakura petals and 変態, or sparks and PORNO, for a moment.
+* **Polish**: results cards come up one after the other, the background glow drifts slowly, and the viewer opens with a short zoom. Everything respects "Réduire les animations".
+
 **v2.6 (vertical viewer, music):**
 * **Viewer**: one item per screen, like TikTok or Reddit. Swipe up for the next item, down for the previous one. Swipe right (or tap ✕) to close. ▲/▼ buttons and the keyboard arrows also work. Zoom on an image locks the paging.
 * **Video controls**: a time bar you can drag, a sound button and full screen replace the native controls (iOS put those under the app's own bar). Tap a video to pause or play.

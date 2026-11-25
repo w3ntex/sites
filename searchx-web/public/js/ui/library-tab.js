@@ -17,7 +17,7 @@ import { switchMode } from './search-tab.js';
 function OtherMode({ count, what }) {
   const other = modeOf(state.settings) === 'hentai' ? 'porn' : 'hentai';
   if (!count) return null;
-  return html`<button type="button" class="other-mode" onClick=${() => switchMode(other)}>
+  return html`<button type="button" class="other-mode" onClick=${e => switchMode(other, e)}>
     <${Icon} name=${MODES[other].icon} size=${14} />${count} ${what} en mode ${MODES[other].label.toLowerCase()} · Changer de mode
   </button>`;
 }

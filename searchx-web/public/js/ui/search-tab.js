@@ -9,11 +9,11 @@ import {
 } from '../config.js';
 import {
   runSearch, loadMore, canLoadMore, refresh, activeSources, setFilters, resetFilters, activeFilterCount,
-  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch, recentList
-} from '../search.js';
+  clearCreators, clearRecent, setTab, retrySource, disableSources, isFollowing, toggleFollow, updateFollow, rerunSearch, recentList, goHome } from '../search.js';
 import { itemMode } from '../modes.js';
 import { suggestTags, REFUSED_MESSAGE } from '../api.js';
 import { haptic } from '../lib/haptics.js';
+import { themeTransition } from '../lib/fx.js';
 import { compact } from '../lib/format.js';
 import { applyTheme } from '../lib/theme.js';
 import { openViewer } from './viewer.js';
@@ -39,15 +39,17 @@ function MoreResults() {
 const label = (opts, v) => (opts.find(o => o[0] === v) || [, ''])[1];
 const LAYOUT_ICON = { grid2: 'layers', grid3: 'grip', list: 'list' };
 
-export function switchMode(mode) {
+export function switchMode(mode, event = null) {
   if (modeOf(state.settings) === mode) return;
   haptic();
-  updateSettings({ mode });
-  applyTheme(mode);
-  // Same words in the other mode's sites; an @X account only makes sense in porn mode.
-  const q = state.search.query;
-  if (q && !state.search.notice && !/^@\w+$/.test(q)) rerunSearch();
-  else { state.search = emptySearch(); notify(); }
+  themeTransition(mode, event, () => {
+    updateSettings({ mode });
+    applyTheme(mode);
+    // Same words in the other mode's sites; an @X account only makes sense in porn mode.
+    const q = state.search.query;
+    if (q && !state.search.notice && !/^@\w+$/.test(q)) rerunSearch();
+    else { state.search = emptySearch(); notify(); }
+  });
 }
 
 function SearchField({ focused, setFocused }) {
@@ -273,7 +275,7 @@ function Results() {
   if (S.redirect === 'hentai') {
     return html`<${EmptyState} icon="sakura" title="Ça, c'est du hentai"
       text=${`Le mode porno ne montre jamais de hentai. « ${S.query} » se cherche en mode hentai, sur les sites hentai.`}>
-      <button type="button" class="btn small" onClick=${() => { const q = S.query; switchMode('hentai'); runSearch(q); }}>
+      <button type="button" class="btn small" onClick=${e => { const q = S.query; switchMode('hentai', e); setTimeout(() => runSearch(q), 0); }}>
         <${Icon} name="sakura" size=${16} /> Chercher en mode hentai</button>
     <//>`;
   }
@@ -391,7 +393,7 @@ function ModeSwitch() {
   const mode = modeOf(state.settings);
   return html`<div class="mode-switch" role="tablist" aria-label="Mode">
     ${Object.entries(MODES).map(([k, m]) => html`<button type="button" key=${k} role="tab" aria-selected=${mode === k ? 'true' : 'false'}
-      class=${cx('mode-btn', `m-${k}`, mode === k && 'on')} onClick=${() => switchMode(k)}>
+      class=${cx('mode-btn', `m-${k}`, mode === k && 'on')} onClick=${e => switchMode(k, e)}>
       <${Icon} name=${m.icon} size=${16} /><span>${m.label}</span></button>`)}
   </div>`;
 }
@@ -485,6 +487,8 @@ export function SearchTab() {
   return html`<div class="tab tab-search">
     <header class=${cx('topbar', hidden && 'tucked')}>
       <div class="search-row">
+        ${S.query && !focused && html`<button type="button" class="icon-btn tool home-btn" aria-label="Accueil"
+          onClick=${() => { haptic(); goHome(); }}><${Icon} name="home" size=${20} /></button>`}
         <${SearchField} focused=${focused} setFocused=${setFocused} />
         ${!focused && html`<button type="button" class=${cx('icon-btn tool', nFilters && 'on')} aria-label="Filtres"
           onClick=${() => { haptic(); openSheet('filters'); }}>

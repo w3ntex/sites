@@ -44,17 +44,17 @@ function clock(ms) {
   return duration(ms / 1000) || '0:00';
 }
 
-function Eq() {
+export function Eq() {
   return html`<span class="isl-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>`;
 }
 
-function Art({ src, cls = '' }) {
+export function Art({ src, cls = '' }) {
   return src
     ? html`<img class=${cx('isl-art', cls)} src=${src} alt="" referrerpolicy="no-referrer" draggable="false" />`
     : html`<span class=${cx('isl-art', 'empty', cls)}><${Icon} name="music" size=${14} /></span>`;
 }
 
-function ProgressBar({ p }) {
+export function ProgressBar({ p }) {
   const bar = useRef(null);
   const [drag, setDrag] = useState(null); // fraction while dragging
   const total = p.track.duration || 0;
@@ -178,7 +178,7 @@ function Copyable({ value, label }) {
   </div>`;
 }
 
-function ConnectSteps() {
+export function ConnectSteps({ page = false }) {
   const m = useMusic();
   const [clientId, setClientId] = useState(savedClientId());
   const [code, setCode] = useState('');
@@ -193,6 +193,15 @@ function ConnectSteps() {
       location.href = await beginConnect(clientId);
     } catch (e) {
       setMsg(e.message);
+    }
+  };
+  const paste = async setter => {
+    haptic();
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (t) setter(t); else toast('Le presse-papiers est vide.');
+    } catch {
+      toast('Fais un appui long dans le champ, puis « Coller ».');
     }
   };
   const usePasted = async () => {
@@ -213,8 +222,11 @@ function ConnectSteps() {
     return html`
       <div class="music-wait"><${Spinner} size=${22} /><p>Termine la connexion sur la page Spotify (bouton <b>Accepter</b>), puis reviens ici : SearchX la reçoit tout seul.</p></div>
       <label class="field-label">La page Spotify t’a donné un code ? Colle-le ici</label>
-      <input class="field" type="text" placeholder="SX1.…" value=${code} onInput=${e => setCode(e.currentTarget.value.trim())}
-        autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <div class="field-with-btn">
+        <input class="field" type="text" placeholder="SX1.…" value=${code} onInput=${e => setCode(e.currentTarget.value.trim())}
+          autocapitalize="off" autocorrect="off" spellcheck="false" />
+        <button type="button" class="btn small ghost" onClick=${() => paste(setCode)}><${Icon} name="clipboard" size=${15} /> Coller</button>
+      </div>
       ${(msg || m.error) && html`<p class="bad relay-msg">${msg || m.error}</p>`}
       <div class="sheet-buttons col">
         <button type="button" class="btn" disabled=${!code || busy} onClick=${usePasted}>${busy ? 'Connexion…' : 'Valider le code'}</button>
@@ -223,10 +235,10 @@ function ConnectSteps() {
   }
 
   return html`
-    <p class="sheet-text">Pilote ta musique Spotify depuis SearchX : titre en cours, lecture, pause, précédent, suivant, aléatoire et « J’aime ».
-      La musique joue dans l’app Spotify (Spotify ne permet pas à une autre app de la jouer sur iPhone).</p>
+    ${!page && html`<p class="sheet-text">Pilote ta musique Spotify depuis SearchX : titre en cours, lecture, pause, précédent, suivant, aléatoire et « J’aime ».
+      La musique joue dans l’app Spotify (Spotify ne permet pas à une autre app de la jouer sur iPhone).</p>`}
     <p class="music-req"><${Icon} name="info" size=${15} /><span>Spotify demande un compte <b>Premium</b> et une petite « app développeur » gratuite (3 minutes, une seule fois).</span></p>
-    <ol class="steps">
+    <ol class=${cx('steps', page && 'step-cards')}>
       <li>Ouvre <a href=${SPOTIFY_DASHBOARD} target="_blank" rel="noopener noreferrer">developer.spotify.com/dashboard</a> et connecte-toi avec ton compte Spotify (accepte les conditions la première fois).</li>
       <li>Touche <b>Create app</b>. Nom : <b>SearchX</b>, description : <b>Télécommande</b>. Dans <b>Redirect URIs</b>, colle cette adresse puis touche <b>Add</b> :
         <${Copyable} value=${redirect} label="Adresse" /></li>
@@ -234,11 +246,14 @@ function ConnectSteps() {
       <li>Dans l’app créée, ouvre <b>Settings</b>, copie le <b>Client ID</b> et colle-le ici :</li>
     </ol>
     <label class="field-label">Client ID</label>
-    <input class="field" type="text" inputmode="text" placeholder="32 caractères" value=${clientId} maxlength="40"
-      onInput=${e => setClientId(e.currentTarget.value.trim())} autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <div class="field-with-btn">
+      <input class="field" type="text" inputmode="text" placeholder="32 caractères" value=${clientId} maxlength="40"
+        onInput=${e => setClientId(e.currentTarget.value.trim())} autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <button type="button" class="btn small ghost" onClick=${() => paste(setClientId)}><${Icon} name="clipboard" size=${15} /> Coller</button>
+    </div>
     ${(msg || m.error) && html`<p class="bad relay-msg">${msg || m.error}</p>`}
     <div class="sheet-buttons col">
-      <button type="button" class="btn spotify" disabled=${!isClientId(clientId)} onClick=${connect}><${Icon} name="spotify" size=${18} /> Connecter Spotify</button>
+      <button type="button" class=${cx('btn spotify', page && 'big')} disabled=${!isClientId(clientId)} onClick=${connect}><${Icon} name="spotify" size=${18} /> Connecter Spotify</button>
     </div>
     <p class="sheet-hint">Si Spotify affiche « not registered » ou « not allowed » : dans ton app Spotify → <b>User Management</b>, ajoute l’e-mail de ton compte Spotify.
       Les jetons restent sur ce téléphone ; SearchX ne voit jamais ton mot de passe.</p>`;

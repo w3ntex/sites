@@ -18,8 +18,13 @@ export const SPOTIFY_SCOPES = [
   'user-modify-playback-state',
   'user-read-currently-playing',
   'user-library-read',
-  'user-library-modify'
+  'user-library-modify',
+  'playlist-read-private',
+  'playlist-read-collaborative',
+  'user-read-recently-played'
 ];
+// Needed by the Musique tab (playlists, recently played): added in 2.7, older sign-ins lack them.
+export const LIBRARY_SCOPES = ['playlist-read-private', 'user-read-recently-played'];
 export const SPOTIFY_DASHBOARD = 'https://developer.spotify.com/dashboard';
 
 const KEY = 'spotify';             // { clientId, access, refresh, exp, scope }
@@ -306,6 +311,7 @@ function apiError(status, data) {
   if (status === 403 && /registered|developer|allowlist|not allowed/i.test(message)) {
     return new SpotifyError('user', 'Ton compte Spotify n’est pas autorisé par ton app : dans ton app Spotify → User Management, ajoute l’e-mail de ton compte.', status);
   }
+  if (status === 403 && /scope/i.test(message)) return new SpotifyError('scope', 'Reconnecte Spotify pour autoriser cette partie (playlists, titres récents).', status);
   if (status === 403) return new SpotifyError('restricted', 'Spotify ne permet pas cette action maintenant.', status);
   if (status === 404 && /device/i.test(`${reason} ${message}`)) return new SpotifyError('device', 'Aucun appareil Spotify actif : ouvre Spotify et lance une musique.', status);
   if (status === 404) return new SpotifyError('missing', 'Spotify ne trouve pas cet élément.', status);
@@ -315,7 +321,7 @@ function apiError(status, data) {
 
 let backoffUntil = 0;
 
-async function api(path, { method = 'GET', query = null, body = undefined, retry = true } = {}) {
+async function api(path, { method = 'GET', query = null, body = undefined, retry = true, signal } = {}) {
   const token = await accessToken();
   if (!token) throw new SpotifyError('auth', 'Spotify n’est pas connecté.');
   const url = `${API}${path}${query ? `?${new URLSearchParams(query)}` : ''}`;
@@ -323,15 +329,17 @@ async function api(path, { method = 'GET', query = null, body = undefined, retry
   try {
     res = await fetch(url, {
       method,
+      signal,
       headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined
     });
-  } catch {
+  } catch (e) {
+    if (signal?.aborted) throw e;
     throw new SpotifyError('network', navigator.onLine === false ? 'Pas de connexion Internet.' : 'Spotify est injoignable.');
   }
   if (res.status === 401 && retry) {
     await accessToken(true);
-    return api(path, { method, query, body, retry: false });
+    return api(path, { method, query, body, retry: false, signal });
   }
   if (res.status === 429) {
     const wait = Math.min(60, Number(res.headers.get('Retry-After')) || 5);
@@ -485,6 +493,12 @@ export async function musicCommand(name, arg) {
         await api('/me/player/shuffle', { method: 'PUT', query: { state: on ? 'true' : 'false' } });
         break;
       }
+      case 'repeat': {
+        const next = { off: 'context', context: 'track', track: 'off' }[p?.repeat || 'off'];
+        if (p) setMusic({ playback: { ...p, repeat: next } });
+        await api('/me/player/repeat', { method: 'PUT', query: { state: next } });
+        break;
+      }
       case 'like': {
         const uri = p?.track?.uri;
         if (!uri || p.track.episode) return '';
@@ -550,4 +564,159 @@ export function startMusic() {
 export function spotifyOpenUrl(track) {
   // spotify: links open the Spotify app; open.spotify.com is the fallback page.
   return track?.uri ? track.uri : 'spotify:';
+}
+
+// ---------- Musique tab: library, search, queue, devices ----------
+
+/** Whether the sign-in allowed these scopes (unknown → true: errors say it later). */
+export function hasScopes(list = LIBRARY_SCOPES) {
+  const granted = String(tokens?.scope || '').split(/\s+/).filter(Boolean);
+  if (!granted.length) return true;
+  return list.every(s => granted.includes(s));
+}
+
+function smallArt(images, min = 64) {
+  if (!Array.isArray(images) || !images.length) return '';
+  const sorted = images.filter(i => i?.url).sort((a, b) => (a.width || 0) - (b.width || 0));
+  return (sorted.find(i => (i.width || 0) >= min) || sorted[sorted.length - 1] || {}).url || '';
+}
+
+export function slimTrack(t) {
+  if (!t || !t.uri || t.type === 'episode' && !t.name) return null;
+  return {
+    id: t.id || t.uri,
+    uri: t.uri,
+    name: t.name || '',
+    artist: (t.artists || []).map(a => a.name).filter(Boolean).join(', ') || t.show?.name || '',
+    art: smallArt(t.album?.images || t.images || t.show?.images, 100),
+    duration: Number(t.duration_ms) || 0,
+    albumUri: t.album?.uri || '',
+    explicit: Boolean(t.explicit),
+    playable: t.is_playable !== false && !t.is_local
+  };
+}
+
+export function slimPlaylist(p) {
+  if (!p || !p.uri) return null;
+  return {
+    id: p.id,
+    uri: p.uri,
+    name: p.name || '',
+    art: smallArt(p.images, 200),
+    owner: p.owner?.display_name || p.owner?.id || '',
+    total: p.items?.total ?? p.tracks?.total ?? null,
+    kind: 'playlist'
+  };
+}
+
+export function slimAlbum(a) {
+  if (!a || !a.uri) return null;
+  return { id: a.id, uri: a.uri, name: a.name || '', art: smallArt(a.images, 200), owner: (a.artists || []).map(x => x.name).join(', '), total: a.total_tracks ?? null, kind: 'album' };
+}
+
+export function slimArtist(a) {
+  if (!a || !a.uri) return null;
+  return { id: a.id, uri: a.uri, name: a.name || '', art: smallArt(a.images, 120), kind: 'artist' };
+}
+
+const compactList = (list, fn) => (Array.isArray(list) ? list : []).map(fn).filter(Boolean);
+
+export async function myPlaylists() {
+  const data = await api('/me/playlists', { query: { limit: 50 } });
+  return compactList(data?.items, slimPlaylist);
+}
+
+/** Liked songs (null when this app may not read them). */
+export async function likedTracks() {
+  try {
+    const data = await api('/me/tracks', { query: { limit: 50 } });
+    return compactList(data?.items, it => slimTrack(it.track || it.item));
+  } catch (e) {
+    if (e.kind === 'scope' || e.status === 403 || e.status === 404 || e.status === 400) return null;
+    throw e;
+  }
+}
+
+export async function recentTracks() {
+  const data = await api('/me/player/recently-played', { query: { limit: 30 } });
+  const seen = new Set();
+  return compactList(data?.items, it => {
+    const t = slimTrack(it.track);
+    if (!t || seen.has(t.uri)) return null;
+    seen.add(t.uri);
+    return { ...t, contextUri: it.context?.uri || '', playedAt: it.played_at || '' };
+  });
+}
+
+/** Tracks of a playlist or an album. Since February 2026 playlists use /items (older: /tracks). */
+export async function collectionTracks(c) {
+  if (c.kind === 'album') {
+    const data = await api(`/albums/${encodeURIComponent(c.id)}`);
+    const art = smallArt(data?.images, 100);
+    return compactList(data?.tracks?.items, t => { const s = slimTrack(t); return s && { ...s, art: s.art || art, albumUri: data.uri }; });
+  }
+  let data;
+  try {
+    data = await api(`/playlists/${encodeURIComponent(c.id)}/items`, { query: { limit: 100 } });
+  } catch (e) {
+    if (e.status !== 404 && e.status !== 400) throw e;
+    data = await api(`/playlists/${encodeURIComponent(c.id)}/tracks`, { query: { limit: 100 } });
+  }
+  return compactList(data?.items, it => slimTrack(it.item || it.track));
+}
+
+export async function searchSpotify(q, signal) {
+  const data = await api('/search', { query: { q, type: 'track,artist,album,playlist', limit: 10 }, signal });
+  return {
+    tracks: compactList(data?.tracks?.items, slimTrack),
+    artists: compactList(data?.artists?.items, slimArtist),
+    albums: compactList(data?.albums?.items, slimAlbum),
+    playlists: compactList(data?.playlists?.items, slimPlaylist)
+  };
+}
+
+export async function getQueue() {
+  const data = await api('/me/player/queue');
+  return { current: slimTrack(data?.currently_playing), next: compactList(data?.queue, slimTrack).slice(0, 30) };
+}
+
+export async function getDevices() {
+  const data = await api('/me/player/devices');
+  return (data?.devices || []).map(d => ({ id: d.id, name: d.name || 'Appareil', type: d.type || '', active: Boolean(d.is_active), restricted: Boolean(d.is_restricted) }));
+}
+
+/** Plays something: a list of tracks, or a playlist / album / artist (optionally from one track). */
+export async function playItems({ uris = null, contextUri = '', offsetUri = '', deviceId = '' } = {}) {
+  const offset = offsetUri ? { offset: { uri: offsetUri } } : {};
+  const body = contextUri ? { context_uri: contextUri, ...offset } : { uris: (uris || []).slice(0, 100), ...offset };
+  try {
+    await api('/me/player/play', { method: 'PUT', body, query: deviceId ? { device_id: deviceId } : null });
+  } catch (e) {
+    // Nothing active: start on this phone's Spotify (or the only device) when Spotify knows one.
+    if (e.kind !== 'device' || deviceId) throw e;
+    const devices = await getDevices().catch(() => []);
+    const target = devices.find(d => /smartphone|tablet/i.test(d.type)) || devices[0];
+    if (!target) throw e;
+    await api('/me/player/play', { method: 'PUT', body, query: { device_id: target.id } });
+  }
+  settle([500, 1500]);
+}
+
+export async function setShuffle(on) {
+  await api('/me/player/shuffle', { method: 'PUT', query: { state: on ? 'true' : 'false' } });
+  settle([400]);
+}
+
+export async function addToQueue(uri) {
+  await api('/me/player/queue', { method: 'POST', query: { uri } });
+}
+
+export async function transferTo(deviceId) {
+  await api('/me/player', { method: 'PUT', body: { device_ids: [deviceId], play: true } });
+  settle([600, 1800]);
+}
+
+/** Starts again a sign-in with the same Client ID (to add the scopes of a newer version). */
+export async function reconnectUrl() {
+  return beginConnect(savedClientId());
 }

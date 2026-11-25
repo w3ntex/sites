@@ -72,6 +72,16 @@ export function runSearch(raw, { tab = null } = {}) {
   start(q, { tab: wanted });
 }
 
+/** Home: back to the welcome page (searches in progress stopped, results forgotten), at the top. */
+export function goHome() {
+  abortAll();
+  generation++;
+  state.search = emptySearch();
+  state.tab = 'search';
+  notify();
+  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+}
+
 function start(q, { fresh = false, tab = null, keepTab = false } = {}) {
   abortAll();
   const g = ++generation;

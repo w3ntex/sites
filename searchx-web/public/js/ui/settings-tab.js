@@ -2,7 +2,7 @@ import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Group, Row, Switch, Sheet, SourceBadge, Spinner, cx } from './common.js';
 import { PinSetupSheet } from './lock.js';
-import { state, notify, updateSettings, openSheet, closeSheet, toast, lockEnabled, lockNow } from '../state.js';
+import { state, notify, updateSettings, openSheet, closeSheet, toast, lockEnabled, lockNow, switchTab } from '../state.js';
 import { SOURCES, LOCK_DELAYS, INSTALL_ICONS, APP_VERSION, LAYOUTS, MODES, modeOf, modeSources } from '../config.js';
 import { clearRecent, disableSources, enableSource } from '../search.js';
 import { switchMode } from './search-tab.js';
@@ -156,7 +156,7 @@ function MusicGroup() {
     <${Row} icon="spotify" iconColor="#1db954" title="Spotify" chevron
       subtitle=${m.connected ? (now ? `${now.name} · ${now.artist}` : 'Connecté · rien en lecture') : 'Contrôle ta musique depuis SearchX (Premium)'}
       right=${m.connected ? 'Connecté' : m.pending ? 'En cours…' : 'À connecter'}
-      onClick=${() => openSheet('custom', { render: () => html`<${SpotifySheet} />` })} />
+      onClick=${() => switchTab('music')} />
     ${m.connected && html`<${Row} icon="music" iconColor="#1db954" title="Île musicale" subtitle="En haut de l’écran ; touche-la pour les commandes."
       right=${html`<${Switch} checked=${s.musicIsland} onChange=${v => updateSettings({ musicIsland: v })} label="Île musicale" />`} />`}
     <${MixRow} inGroup />
@@ -220,7 +220,7 @@ export function SettingsTab() {
         <p class="mode-card-title">Mode</p>
         <div class="mode-pick">
           ${Object.entries(MODES).map(([k, m]) => html`<button type="button" key=${k} class=${cx('mode-opt', `m-${k}`, mode === k && 'on')}
-            onClick=${() => { switchMode(k); toast(`Mode ${m.label.toLowerCase()}`); }}>
+            onClick=${e => switchMode(k, e)}>
             <span class="mode-opt-icon"><${Icon} name=${m.icon} size=${22} /></span>
             <strong>${m.label}</strong><small>${m.sub}</small>
             ${mode === k && html`<span class="mode-opt-check"><${Icon} name="check" size=${14} stroke=${3} /></span>`}

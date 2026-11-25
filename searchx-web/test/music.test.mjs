@@ -140,3 +140,19 @@ test('music during videos: only when asked, and only while music plays', () => {
   assert.equal(shouldMixWithMusic({ settings: { musicMix: true }, playingHere: false }), false, 'Spotify connected and silent: normal sound (silent switch ignored)');
   assert.equal(shouldMixWithMusic({ settings: { musicMix: true }, playingHere: null }), true, 'Spotify not connected: trust the setting');
 });
+
+test('Musique tab: tracks, playlists, albums and artists from the Web API', async () => {
+  const { slimTrack, slimPlaylist, slimAlbum, slimArtist, hasScopes } = await import('../public/js/lib/spotify.js');
+  const t = slimTrack({ uri: 'spotify:track:1', id: '1', name: 'A', duration_ms: 1000, explicit: true, is_playable: true,
+    artists: [{ name: 'X' }, { name: 'Y' }], album: { uri: 'spotify:album:9', images: [{ url: 'big', width: 640 }, { url: 'small', width: 64 }, { url: 'mid', width: 300 }] } });
+  assert.deepEqual({ artist: t.artist, art: t.art, albumUri: t.albumUri, explicit: t.explicit, playable: t.playable }, { artist: 'X, Y', art: 'mid', albumUri: 'spotify:album:9', explicit: true, playable: true });
+  assert.equal(slimTrack({ uri: 'spotify:local:1', name: 'L', is_local: true }).playable, false, 'local files cannot be played remotely');
+  assert.equal(slimTrack(null), null);
+  assert.equal(slimTrack({ name: 'no uri' }), null);
+  // February 2026: playlists count their content in "items" (older: "tracks").
+  assert.equal(slimPlaylist({ uri: 'spotify:playlist:p', id: 'p', name: 'P', items: { total: 12 }, owner: { display_name: 'Moi' } }).total, 12);
+  assert.equal(slimPlaylist({ uri: 'spotify:playlist:p', id: 'p', name: 'P', tracks: { total: 7 } }).total, 7);
+  assert.equal(slimAlbum({ uri: 'spotify:album:a', id: 'a', name: 'Al', artists: [{ name: 'Z' }], total_tracks: 9 }).owner, 'Z');
+  assert.equal(slimArtist({ uri: 'spotify:artist:r', id: 'r', name: 'R', images: [] }).kind, 'artist');
+  assert.equal(hasScopes(), true, 'unknown scopes: assume granted (errors tell otherwise)');
+});

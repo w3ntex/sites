@@ -1,4 +1,4 @@
-import { html, useEffect } from '../../vendor/preact-htm.mjs';
+import { html, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { Toast, cx } from './common.js';
 import { SearchTab } from './search-tab.js';
@@ -7,6 +7,8 @@ import { HistoryTab } from './history-tab.js';
 import { SettingsTab } from './settings-tab.js';
 import { Viewer } from './viewer.js';
 import { MusicIsland } from './music.js';
+import { MusicTab } from './music-tab.js';
+import { goHome } from '../search.js';
 import { SheetHost } from './sheets.js';
 import { LockScreen } from './lock.js';
 import { state, notify, useAppState, updateSettings, lockEnabled, switchTab } from '../state.js';
@@ -15,11 +17,13 @@ import { authBusy } from '../lib/lock.js';
 import { Petals, isNeon } from './theme.js';
 
 const TABS = [
-  ['search', 'Recherche', 'search'],
+  ['search', 'Accueil', 'home'],
+  ['music', 'Musique', 'music'],
   ['library', 'Favoris', 'heart'],
   ['history', 'Historique', 'history'],
   ['settings', 'Réglages', 'gear']
 ];
+const FILLED = { home: 'homeFill', heart: 'heartFill' };
 
 function AgeGate() {
   const neon = isNeon();
@@ -39,19 +43,23 @@ function AgeGate() {
 }
 
 function TabBar() {
-  return html`<nav class="tabbar" aria-label="Navigation">
+  const index = Math.max(0, TABS.findIndex(([id]) => id === state.tab));
+  return html`<nav class="tabbar" aria-label="Navigation" style=${`--tabs:${TABS.length};--i:${index}`}>
+    <span class="tab-glider" aria-hidden="true"></span>
     ${TABS.map(([id, label, icon]) => html`<button type="button" key=${id} class=${cx('tab-btn', state.tab === id && 'on')}
       aria-current=${state.tab === id ? 'page' : undefined}
       onClick=${() => {
         haptic();
         if (state.tab === id) {
+          // Accueil again: back to the welcome page (results forgotten), at the top.
+          if (id === 'search' && state.search.query) { goHome(); return; }
           if (id === 'library' && state.playlistId) { state.playlistId = null; notify(); }
           window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
         switchTab(id);
       }}>
-      <${Icon} name=${state.tab === id && icon === 'heart' ? 'heartFill' : icon} size=${24} stroke=${state.tab === id ? 2.3 : 1.9} />
+      <${Icon} name=${state.tab === id && FILLED[icon] ? FILLED[icon] : icon} size=${24} stroke=${state.tab === id ? 2.3 : 1.9} />
       <span>${label}</span>
     </button>`)}
   </nav>`;
@@ -186,8 +194,18 @@ export function App() {
     document.documentElement.classList.toggle('noscroll', Boolean(s.viewer || s.sheet || (s.locked && lockEnabled()) || !s.settings.ageOK));
   });
 
+  // Pages slide in from the side of the tab they come from.
+  const lastTab = useRef(s.tab);
+  const dir = useRef('none');
+  if (lastTab.current !== s.tab) {
+    const a = TABS.findIndex(([id]) => id === lastTab.current), b = TABS.findIndex(([id]) => id === s.tab);
+    dir.current = b > a ? 'next' : 'prev';
+    lastTab.current = s.tab;
+  }
+
   let page;
   switch (s.tab) {
+    case 'music': page = html`<${MusicTab} />`; break;
     case 'library': page = html`<${LibraryTab} />`; break;
     case 'history': page = html`<${HistoryTab} />`; break;
     case 'settings': page = html`<${SettingsTab} />`; break;
@@ -195,11 +213,13 @@ export function App() {
   }
 
   const locked = s.settings.ageOK && s.locked && lockEnabled();
+  // The Musique tab already shows what plays: no island there (except over the viewer).
+  const island = s.settings.ageOK && !locked && !s.hidden && s.settings.musicIsland && (s.tab !== 'music' || s.viewer);
   return html`<div class=${cx('app', s.viewer && 'viewer-open', s.sheet && 'sheet-open')}>
-    ${page}
+    <div class="page" key=${s.tab} data-dir=${dir.current}>${page}</div>
     <${TabBar} />
     ${s.viewer && html`<${Viewer} key=${s.viewer.key} />`}
-    ${s.settings.ageOK && !locked && !s.hidden && s.settings.musicIsland && html`<${MusicIsland} />`}
+    ${island && html`<${MusicIsland} />`}
     <${SheetHost} />
     ${!locked && html`<${Toast} toast=${s.toast} />`}
     ${s.update && html`<button type="button" class="update-pill" onClick=${() => location.reload()}><${Icon} name="refresh" size=${15} /> Nouvelle version · toucher pour recharger</button>`}
