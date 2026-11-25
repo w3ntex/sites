@@ -175,9 +175,11 @@ function ResultsToolbar() {
   return html`<div class="results-bar">
     <span class="rb-count">${S.results.length ? `${S.results.length} résultat${S.results.length > 1 ? 's' : ''} · ${SOURCES[S.tab].name}` : ''}
       ${notes.length ? html`<small>${notes.join(' · ')}</small>` : null}</span>
-    <button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier par', key: 'sort', options: SORT_OPTIONS, value: f.sort, onPick: v => setFilters({ sort: v }) }); }}>
-      <${Icon} name="sort" size=${14} />${label(SORT_OPTIONS, f.sort)}
-    </button>
+    ${S.tab === 'x'
+      ? html`<span class="rb-btn static" title="Les posts s'affichent dans le même ordre que sur X"><${Icon} name="at" size=${14} />Ordre de X</span>`
+      : html`<button type="button" class="rb-btn" onClick=${() => { haptic(); openSheet('options', { title: 'Trier par', key: 'sort', options: SORT_OPTIONS, value: f.sort, onPick: v => setFilters({ sort: v }) }); }}>
+        <${Icon} name="sort" size=${14} />${label(SORT_OPTIONS, f.sort)}
+      </button>`}
     <button type="button" class="rb-btn icon" aria-label="Changer l'affichage" onClick=${cycleLayout}>
       <${Icon} name=${LAYOUT_ICON[state.settings.layout] || 'layers'} size=${16} />
     </button>
@@ -212,8 +214,9 @@ function XAppButton({ q }) {
 function XHint() {
   const follows = state.xFollows.slice(0, 12);
   return html`<div class="xhint">
-    <p><${Icon} name="info" size=${15} /> Sans compte connecté, X ne montre qu'une poignée de posts adultes par mot.
-      Ici : un compte précis (<b>@nom</b>) marche très bien. Pour tout voir avec ton compte, ouvre la recherche dans l'app X :</p>
+    <p><${Icon} name="info" size=${15} /> Sans compte connecté, X ne montre qu'une poignée de posts adultes par mot,
+      dans l'ordre de son onglet « Récent ». Ici : un compte précis (<b>@nom</b>) marche très bien. Pour tout voir avec ton compte
+      (et l'onglet « Populaire »), ouvre la recherche dans l'app X :</p>
     <${XAppButton} q=${state.search.sent || state.search.query} />
     ${follows.length ? html`<div class="chips scroll-x">${follows.map(f => html`<button type="button" key=${f.user} class="chip small"
       onClick=${() => { haptic(); runSearch(`@${f.user}`); }}><${Icon} name="at" size=${12} />${f.user}</button>`)}</div>` : null}

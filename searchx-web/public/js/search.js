@@ -391,7 +391,9 @@ function stableSort(list, key) {
   return list.map((it, i) => [it, i, key(it)]).sort((a, b) => (b[2] - a[2]) || (a[1] - b[1])).map(x => x[0]);
 }
 
-function rank(list, sort, query) {
+/** Order shown. X keeps X's own order (account timeline, or the search's "Récent" tab) whatever the sort. */
+export function rank(list, sort, query, src = '') {
+  if (src === 'x') return list;
   if (sort === 'views') return stableSort(list, it => it.views ?? it.likes ?? -1);
   if (sort === 'newest') return stableSort(list, it => it.date ?? -1);
   if (sort === 'rating') return stableSort(list, it => it.rating ?? it.likes ?? -1);
@@ -431,7 +433,7 @@ export function recompute() {
   S.creators = computeCreators(list);
   const selected = new Set(S.selectedCreators);
   const filtered = selected.size ? list.filter(it => (it.by || []).some(n => selected.has(creatorKey(n)))) : list;
-  S.results = rank(filtered, f.sort, S.query);
+  S.results = rank(filtered, f.sort, S.query, S.tab);
 }
 
 export function isAnySourceLoading() {

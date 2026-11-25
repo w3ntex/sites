@@ -1446,3 +1446,6 @@ html.vt-theme::view-transition-new(root) { z-index: 2; }
 /* v2.7.1 — infinite scroll paused: why */
 .list-end .list-note { margin: 0 0 10px; font-size: 13px; color: var(--text-3); text-align: center; }
 .list-end:has(.list-note) { flex-direction: column; }
+
+/* v2.7.3 — X keeps X's order: no sort menu there */
+.rb-btn.static { cursor: default; color: var(--text-2); }

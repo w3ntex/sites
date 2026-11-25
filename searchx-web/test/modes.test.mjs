@@ -56,3 +56,20 @@ test('hentai mode: "hentai" / "anime" are dropped from the words sent', () => {
   assert.equal(forMode('hentai', 'hentai'), 'hentai');
   assert.equal(forMode('hentai elf', 'porn'), 'hentai elf');
 });
+
+test('X keeps X\'s own order (keywords and accounts), whatever the sort', async () => {
+  const { rank } = await import('../public/js/search.js');
+  // As X sends them: newest first; the best keyword match is last.
+  const list = [
+    { id: 'x:3', src: 'x', title: 'morning walk', date: 300, likes: 1 },
+    { id: 'x:2', src: 'x', title: 'sunset at the beach', date: 200, likes: 9 },
+    { id: 'x:1', src: 'x', title: 'sunset beach sunset beach', date: 100, likes: 50 }
+  ];
+  const ids = l => l.map(i => i.id).join(',');
+  for (const sort of ['relevance', 'views', 'newest', 'rating']) {
+    assert.equal(ids(rank(list, sort, 'sunset beach', 'x')), 'x:3,x:2,x:1', `keywords, ${sort}`);
+    assert.equal(ids(rank(list, sort, '@someone', 'x')), 'x:3,x:2,x:1', `account, ${sort}`);
+  }
+  // Other sites still follow the chosen sort.
+  assert.equal(ids(rank(list, 'views', 'sunset beach', 'redgifs')), 'x:1,x:2,x:3');
+});

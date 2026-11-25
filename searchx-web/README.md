@@ -17,6 +17,10 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.3:** The X tab shows posts in X's own order, whatever the sort chosen for the other sites. The sort menu is replaced by "Ordre de X" there.
+* Accounts: the account's timeline, newest first.
+* Keywords: the order of X's "Récent" tab. Nitter cannot read the "Populaire" tab, which the X app button opens.
+
 **v2.7.2:** X accounts (and X searches) are no longer cut at the first 20 posts.
 * Nitter's RSS feeds are read page after page with the cursor Nitter sends in its `Min-Id` header (`…/rss?cursor=…`).
 * If a mirror drops that header, the cursor comes from the "Load more" link of the HTML timeline.
