@@ -7,6 +7,10 @@ import { requestPersistence } from './lib/storage.js';
 import { health } from './api.js';
 import { APP_VERSION } from './config.js';
 import { startMusic, setServerHeaders, onConnected } from './lib/spotify.js';
+import { startInbox } from './lib/inbox.js';
+import { followShared } from './search.js';
+import { searchXUsers } from './api.js';
+import { xUserFromShared } from './shared/xshare.js';
 import { AUDIO_SESSION } from './lib/audio.js';
 
 applyTheme(state.settings.mode);
@@ -23,6 +27,27 @@ onConnected(() => {
   toast(AUDIO_SESSION ? 'Spotify connecté · ta musique continue pendant les vidéos' : 'Spotify connecté');
 });
 startMusic();
+
+// X accounts shared from the X app: iOS Shortcut "SearchX" → this phone's mailbox → followed here.
+const serverHeaders = () => (state.settings.accessKey ? { 'x-sx-key': state.settings.accessKey } : {});
+const welcomeShared = async users => {
+  const added = await followShared(users, u => searchXUsers(u));
+  if (added.length === 1) toast(`@${added[0]} ajouté depuis X`);
+  else if (added.length > 1) toast(`${added.length} comptes ajoutés depuis X`);
+  else if (users.length) toast(`@${users[0]} est déjà dans tes comptes X`);
+};
+startInbox({ headers: serverHeaders, onAccounts: welcomeShared });
+
+// Android (Web Share Target): "Partager → SearchX" opens the app with ?title=&text=&url=.
+{
+  const p = new URLSearchParams(location.search);
+  if (p.has('url') || p.has('text')) {
+    const user = xUserFromShared([p.get('url'), p.get('text'), p.get('title')].filter(Boolean).join(' '));
+    history.replaceState(null, '', location.pathname);
+    if (user) welcomeShared([user]);
+    else toast('Aucun compte X dans ce partage.');
+  }
+}
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });

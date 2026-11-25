@@ -17,6 +17,17 @@ The app then calls the relay straight from the phone, and the Worker is only a f
 
 ## Features
 
+**v2.7.6 (share an X profile to SearchX):**
+* In the X app, Profile → Partager → SearchX adds the account to the followed list. Sharing a post adds its author.
+* iOS doesn't let Home Screen web apps appear in the share sheet: WebKit has no Web Share Target. A Shortcut named "SearchX" does it instead.
+  * Réglages → Comptes X suivis → *Partager depuis l'app X* shows the steps and this phone's address.
+  * The Shortcut has one action, "Obtenir le contenu de l'URL", called with `…/api/inbox/<token>/add?u=` followed by its input.
+* Server: a mailbox per phone (Durable Object `Mailbox`, binding `MAILBOX`, migration `v2`, 30 days at most).
+  * `/add` needs no access key, since the random token is the key.
+  * `/take` returns the waiting accounts once.
+* The app collects the accounts when it opens or comes back, then follows them with their name and picture.
+* Android: `share_target` in the manifest, so SearchX appears in the share sheet directly.
+
 **v2.7.5 (X account suggestions):**
 * Adding an account (Réglages → Comptes X suivis) suggests the X accounts matching what is typed: name or @, with picture, certified badge, private lock and the start of the bio. One tap follows the account, saving its name and picture.
 * Typing "@…" in the search field suggests matching accounts too, under the followed ones.
@@ -187,7 +198,7 @@ Set these in the Worker's **Settings → Variables and Secrets**:
 | `ACCESS_KEY` | If set, the API answers only clients that send this key (Réglages → Avancé → Serveur). |
 | `REDGIFS_TOKEN` | Your own RedGIFs bearer token. Otherwise a free temporary token is fetched automatically. |
 
-The Durable Object `SpotifyHandoff` (binding `SPOTIFY_HANDOFF`, SQLite storage, available on the free plan) is created by the first deploy from `wrangler.jsonc`. Nothing needs to be set up.
+The Durable Objects `SpotifyHandoff` (binding `SPOTIFY_HANDOFF`) and `Mailbox` (binding `MAILBOX`) use SQLite storage, which is available on the free plan. Deploying `wrangler.jsonc` creates them, so there is nothing to set up.
 
 ### Alternative: GitHub Actions
 

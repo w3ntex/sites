@@ -1,6 +1,7 @@
 import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.mjs';
 import { Icon } from './icons.js';
 import { useXUserSuggestions, XUserRow } from './xusers.js';
+import { XShareSheet, XShareEntry } from './xshare.js';
 import { Sheet, Switch, SourceBadge, Thumb, Spinner, cx } from './common.js';
 import { state, closeSheet, openSheet, toast, notify, updateSettings } from '../state.js';
 import { SOURCES, SOURCE_ORDER, MEDIA_OPTIONS, DUR_OPTIONS, HD_OPTIONS, SORT_OPTIONS, LAYOUTS, siteSearchUrl, modeOf, modeSources, xAppUrl } from '../config.js';
@@ -234,6 +235,7 @@ function XAccountsSheet() {
       ${valid && !exact && !sug.loading ? html`<${XUserRow} u=${{ user, name: `@${user}` }} onPick=${follow}
         action=${html`<button type="button" class="btn small ghost" onClick=${() => follow({ user })}>Ajouter</button>`} />` : null}
     </div>`}
+    ${!typing && html`<${XShareEntry} onOpen=${() => openSheet('custom', { render: () => html`<${XShareSheet} />` })} />`}
     <div class="options">
       ${state.xFollows.map(f => html`<div class="option static" key=${f.user}>
         <span class="xavatar small">${f.avatar ? html`<${Thumb} src=${f.avatar} />` : html`<${Icon} name="user" size=${16} />`}</span>

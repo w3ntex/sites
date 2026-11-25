@@ -291,3 +291,51 @@ test('X: Nitter /pic/ addresses in every form (plain, host, https, orig, base64)
   assert.equal(twimgUrl(`/pic/enc/${b64('amplify_video_thumb/1/img/t.jpg')}`), 'https://pbs.twimg.com/amplify_video_thumb/1/img/t.jpg');
   assert.equal(twimgUrl('https://example.com/x.jpg'), null);
 });
+
+test('Share from X: account found in whatever the X app shares', async () => {
+  const { xUserFromShared } = await import('../public/js/shared/xshare.js');
+  assert.equal(xUserFromShared('u=https://x.com/PornPalace?s=21&t=AbCdEf'), 'PornPalace');
+  assert.equal(xUserFromShared('u=https%3A%2F%2Fx.com%2FPornPalace%3Fs%3D21'), 'PornPalace', 'encoded');
+  assert.equal(xUserFromShared('u=https://twitter.com/some_user/status/1999?s=46'), 'some_user', 'a post: its author');
+  assert.equal(xUserFromShared('Regarde ce profil https://mobile.twitter.com/Abc_123'), 'Abc_123');
+  assert.equal(xUserFromShared('https://fxtwitter.com/someone/status/1'), 'someone');
+  assert.equal(xUserFromShared('u=@handle'), 'handle');
+  assert.equal(xUserFromShared('u=handle'), 'handle');
+  assert.equal(xUserFromShared('https://x.com/home'), null);
+  assert.equal(xUserFromShared('https://x.com/i/status/1'), null);
+  assert.equal(xUserFromShared('https://example.com/x.com'), null);
+  assert.equal(xUserFromShared(''), null);
+});
+
+test('Share from X: mailbox (Shortcut adds, the app takes once)', async () => {
+  const token = 'AbCdEfGhIjKlMnOpQrStUv12';
+  const add = await worker.fetch(new Request(`https://app.test/api/inbox/${token}/add?u=https://x.com/PornPalace?s=21&t=xyz`), {}, { waitUntil() {} });
+  assert.equal(add.status, 200);
+  assert.match(await add.text(), /✓ @PornPalace ajouté/);
+  await worker.fetch(new Request(`https://app.test/api/inbox/${token}/add?u=https%3A%2F%2Fx.com%2Fother_one%2Fstatus%2F5`), {}, { waitUntil() {} });
+  await worker.fetch(new Request(`https://app.test/api/inbox/${token}/add?u=https://x.com/pornpalace`), {}, { waitUntil() {} });
+  const bad = await worker.fetch(new Request(`https://app.test/api/inbox/${token}/add?u=https://example.com/`), {}, { waitUntil() {} });
+  assert.equal(bad.status, 400);
+  assert.match(await bad.text(), /Aucun compte X/);
+  const take = await (await worker.fetch(new Request(`https://app.test/api/inbox/${token}/take`), {}, { waitUntil() {} })).json();
+  assert.deepEqual(take.users, ['PornPalace', 'other_one'], 'deduplicated, in order');
+  const again = await (await worker.fetch(new Request(`https://app.test/api/inbox/${token}/take`), {}, { waitUntil() {} })).json();
+  assert.deepEqual(again.users, [], 'handed out once');
+  assert.equal((await worker.fetch(new Request('https://app.test/api/inbox/short/take'), {}, { waitUntil() {} })).status, 400);
+  // With an access key: the Shortcut still adds (the token is its key), the app needs the key to take.
+  const env = { ACCESS_KEY: 'k' };
+  assert.equal((await worker.fetch(new Request(`https://app.test/api/inbox/${token}/add?u=@someone`), env, { waitUntil() {} })).status, 200);
+  assert.equal((await worker.fetch(new Request(`https://app.test/api/inbox/${token}/take`), env, { waitUntil() {} })).status, 401);
+  const ok = await (await worker.fetch(new Request(`https://app.test/api/inbox/${token}/take`, { headers: { 'x-sx-key': 'k' } }), env, { waitUntil() {} })).json();
+  assert.deepEqual(ok.users, ['someone']);
+});
+
+test('Share from X: Mailbox Durable Object', async () => {
+  const { Mailbox } = await import('../src/inbox.js');
+  const data = new Map();
+  const box = new Mailbox({ storage: { get: async k => data.get(k), put: async (k, v) => data.set(k, v), deleteAll: async () => data.clear(), setAlarm: async () => {} } });
+  const post = user => box.fetch(new Request('https://mailbox/', { method: 'POST', body: JSON.stringify({ user }) }));
+  await post('a'); await post('B'); await post('A');
+  assert.deepEqual((await (await box.fetch(new Request('https://mailbox/'))).json()).users, ['a', 'B']);
+  assert.deepEqual((await (await box.fetch(new Request('https://mailbox/'))).json()).users, []);
+});

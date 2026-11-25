@@ -7,6 +7,7 @@
 //   GET /api/dl?url=<direct media>&name= download passthrough (whitelisted media hosts)
 //   GET /api/xvideo?user=<name>&id=<post>  direct file of an X video (read from a Nitter mirror)
 //   GET /api/xusers?q=<text>              X accounts matching the text (to pick one to follow)
+//   GET /api/inbox/<token>/add | take      X accounts shared from the X app (see inbox.js)
 //   GET /api/spotify/callback | /api/spotify/poll   Spotify sign-in hand-over (see spotify.js)
 
 import { friendlyMessage, UpstreamError, MOBILE_UA } from './lib.js';
@@ -24,11 +25,12 @@ import * as r34video from './sources/r34video.js';
 import * as danbooru from './sources/danbooru.js';
 import * as yandere from './sources/yandere.js';
 import { SpotifyHandoff, handleSpotifyCallback, handleSpotifyPoll } from './spotify.js';
+import { Mailbox, handleInbox } from './inbox.js';
 
-// Durable Object class used by the Spotify sign-in hand-over (wrangler.jsonc → durable_objects).
-export { SpotifyHandoff };
+// Durable Object classes (wrangler.jsonc → durable_objects): Spotify sign-in hand-over, shared X accounts.
+export { SpotifyHandoff, Mailbox };
 
-export const VERSION = '2.7.5';
+export const VERSION = '2.7.6';
 
 const SOURCES = { xvideos, xhamster, redtube, eporner, rule34, redgifs, reddit, x, hstream, r34video, danbooru, yandere };
 // Drawn content and unverified posts (X) get the strict minor-safety rules (see safety.js).
@@ -197,10 +199,12 @@ async function handleApi(request, url, env, ctx) {
   if (request.method !== 'GET') return json({ ok: false, error: 'Méthode non autorisée.' }, 405);
   const sentKey = request.headers.get('x-sx-key') || url.searchParams.get('k');
   // The Spotify sign-in page is opened by Spotify (no key); it only stores a one-time code.
-  const open = url.pathname === '/api/health' || url.pathname === '/api/spotify/callback';
+  // The X share Shortcut only knows the mailbox address (its random token is the key).
+  const open = url.pathname === '/api/health' || url.pathname === '/api/spotify/callback' || /^\/api\/inbox\/[^/]+\/add$/.test(url.pathname);
   if (env?.ACCESS_KEY && sentKey !== env.ACCESS_KEY && !open) {
     return json({ ok: false, error: "Clé d'accès requise (Réglages → Serveur).", kind: 'access' }, 401);
   }
+  if (url.pathname.startsWith('/api/inbox/')) return handleInbox(url, env, json);
   switch (url.pathname) {
     case '/api/health': return json({ ok: true, version: VERSION, sources: Object.keys(SOURCES), locked: Boolean(env?.ACCESS_KEY) });
     case '/api/search': return handleSearch(request, url, env, ctx);

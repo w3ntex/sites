@@ -1480,3 +1480,11 @@ html.vt-theme::view-transition-new(root) { z-index: 2; }
 .sug.xsug .xavatar { flex: none; width: 30px; height: 30px; }
 .sug.xsug .xavatar span, .sug.xsug .xavatar img { flex: none; }
 .sug .xverified { color: #1d9bf0; }
+
+/* v2.7.6 — "Partager depuis l'app X" */
+.xshare-entry { width: 100%; display: flex; align-items: center; gap: 12px; margin: 2px 0 14px; padding: 12px; border-radius: 16px; background: var(--surface); text-align: left; color: var(--text); }
+.xshare-entry:active { background: var(--surface-2); }
+.xshare-entry > .icon { flex: none; color: var(--text-3); }
+.xshare-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.xshare-text b { font-size: 15.5px; }
+.xshare-text small { font-size: 12.5px; color: var(--text-3); }

@@ -1,6 +1,6 @@
 import { HENTAI_SUBREDDITS } from './shared/reddit.js';
 
-export const APP_VERSION = '2.7.5';
+export const APP_VERSION = '2.7.6';
 
 // ---- modes ---------------------------------------------------------------------------------------
 // Two separate apps in one: each mode has its own sources (shown one site at a time, never mixed)

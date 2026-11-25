@@ -481,6 +481,29 @@ export function toggleFollow({ user, name = '', avatar = '' }) {
   return isFollowing(u);
 }
 
+/**
+ * Accounts shared from the X app (or another app): followed, then their name and picture are looked
+ * up. Returns the accounts that were new.
+ */
+export async function followShared(users, lookup = null) {
+  const added = [];
+  for (const raw of users) {
+    const u = String(raw || '').replace(/^@/, '');
+    if (!/^\w{1,15}$/.test(u) || isFollowing(u)) continue;
+    toggleFollow({ user: u });
+    added.push(u);
+  }
+  if (lookup) {
+    for (const u of added) {
+      try {
+        const found = (await lookup(u)).find(p => p.user.toLowerCase() === u.toLowerCase());
+        if (found) { updateFollow(found); notify(); }
+      } catch { /* the name comes when the account is opened */ }
+    }
+  }
+  return added;
+}
+
 /** Keeps the name / avatar of followed accounts fresh when their feed is opened. */
 export function updateFollow(profile) {
   if (!profile?.user) return;
